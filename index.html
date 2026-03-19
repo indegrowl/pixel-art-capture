@@ -4,17 +4,36 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Pixel Art Camera</title>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@1,400;1,500;1,600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  :root {
+    --bg:             #080809;
+    --surface:        #0e0e12;
+    --surface-2:      #16161c;
+    --surface-3:      #1c1c24;
+    --border:         rgba(255,255,255,0.07);
+    --border-accent:  rgba(222, 175, 73, 0.4);
+    --accent:         #deaf49;
+    --accent-soft:    rgba(222, 175, 73, 0.18);
+    --accent-glow:    rgba(222, 175, 73, 0.08);
+    --text:           #f0ebe2;
+    --text-mid:       #8a8a96;
+    --text-dim:       #3e3e4a;
+    --mono:           'DM Mono', 'Courier New', monospace;
+    --serif:          'Cormorant', Georgia, serif;
+    --radius:         8px;
+  }
+
   body {
-    background: #000;
-    color: #fff;
-    font-family: 'Press Start 2P', 'Courier New', monospace;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
     overflow: hidden;
     height: 100dvh;
     width: 100dvw;
+    -webkit-font-smoothing: antialiased;
   }
 
   /* ── App container ── */
@@ -23,7 +42,19 @@
     width: 100dvw;
     height: 100dvh;
     overflow: hidden;
-    background: #000;
+    background: var(--bg);
+  }
+
+  /* ── Subtle film grain on UI elements ── */
+  #app::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.018;
+    pointer-events: none;
+    z-index: 6;
+    mix-blend-mode: overlay;
   }
 
   /* ── Viewfinder ── */
@@ -51,7 +82,7 @@
     background: repeating-linear-gradient(
       to bottom,
       transparent 0px, transparent 3px,
-      rgba(0,0,0,0.15) 3px, rgba(0,0,0,0.15) 4px
+      rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 4px
     );
     z-index: 2;
   }
@@ -59,16 +90,23 @@
   /* ── Corner brackets ── */
   .corner {
     position: absolute;
-    width: 24px;
-    height: 24px;
-    border: 3px solid #0afe6a;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--accent);
     z-index: 3;
     pointer-events: none;
+    opacity: 0.7;
+    animation: cornerPulse 4s ease-in-out infinite;
   }
-  #corner-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; }
-  #corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
-  #corner-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; }
-  #corner-br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+  #corner-tl { top: 18px; left: 18px; border-right: none; border-bottom: none; }
+  #corner-tr { top: 18px; right: 18px; border-left: none; border-bottom: none; animation-delay: 1s; }
+  #corner-bl { bottom: 18px; left: 18px; border-right: none; border-top: none; animation-delay: 2s; }
+  #corner-br { bottom: 18px; right: 18px; border-left: none; border-top: none; animation-delay: 3s; }
+
+  @keyframes cornerPulse {
+    0%, 100% { opacity: 0.5; }
+    50%       { opacity: 0.9; }
+  }
 
   /* ── Shutter flash ── */
   #shutter-flash {
@@ -78,38 +116,56 @@
     opacity: 0;
     pointer-events: none;
     z-index: 20;
-    transition: opacity 0.05s;
+    transition: opacity 0.04s;
   }
-  #shutter-flash.flash { opacity: 0.7; }
+  #shutter-flash.flash { opacity: 0.45; }
 
   /* ── Top HUD bar ── */
   #hud-top {
     position: absolute;
     top: 0; left: 0; right: 0;
-    padding: env(safe-area-inset-top, 8px) 16px 14px;
+    padding: env(safe-area-inset-top, 14px) 20px 22px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
+    gap: 10px;
+    background: linear-gradient(
+      to bottom,
+      rgba(8,8,9,0.9) 0%,
+      rgba(8,8,9,0.55) 55%,
+      transparent 100%
+    );
     z-index: 10;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
   }
 
   #hud-title {
-    color: #0afe6a;
-    font-size: 10px;
-    text-shadow: 0 0 8px rgba(10,254,106,0.6);
-    letter-spacing: 1px;
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 24px;
+    color: var(--text);
+    letter-spacing: 0.01em;
+    line-height: 1;
+    user-select: none;
     white-space: nowrap;
+  }
+
+  #hud-title .accent { color: var(--accent); }
+
+  #hud-sep {
+    width: 1px;
+    height: 14px;
+    background: var(--text-dim);
+    flex-shrink: 0;
+    border-radius: 1px;
   }
 
   #status {
     flex: 1;
-    font-size: 7px;
-    color: #f88;
-    text-align: center;
-    min-height: 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 300;
+    color: var(--text-mid);
+    letter-spacing: 0.05em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -117,73 +173,103 @@
 
   #settings-btn {
     margin-left: auto;
-    background: rgba(0,0,0,0.5);
-    border: 2px solid #0afe6a;
-    color: #0afe6a;
-    padding: 6px 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: var(--text-mid);
+    width: 40px;
+    height: 40px;
     font-size: 16px;
-    border-radius: 0;
+    border-radius: 50%;
     cursor: pointer;
-    min-width: 44px;
-    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+    -webkit-tap-highlight-color: transparent;
   }
-  #settings-btn:active { background: rgba(10,254,106,0.2); }
+  #settings-btn:active {
+    background: var(--accent-soft);
+    border-color: var(--border-accent);
+    color: var(--accent);
+  }
 
   /* ── Bottom camera bar ── */
   #camera-bar {
     position: absolute;
     bottom: 0; left: 0; right: 0;
-    padding: 20px 32px env(safe-area-inset-bottom, 20px);
+    padding: 28px 44px env(safe-area-inset-bottom, 28px);
     display: flex;
     align-items: center;
     justify-content: space-evenly;
-    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    background: linear-gradient(
+      to top,
+      rgba(8,8,9,0.92) 0%,
+      rgba(8,8,9,0.55) 60%,
+      transparent 100%
+    );
     z-index: 10;
   }
 
-  /* ── Camera buttons ── */
+  /* ── Camera secondary buttons ── */
   .cam-btn {
-    width: 52px;
-    height: 52px;
-    background: rgba(0,0,0,0.5);
-    border: 2px solid rgba(255,255,255,0.4);
-    color: #fff;
-    font-size: 22px;
+    width: 50px;
+    height: 50px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text);
+    font-size: 19px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.1s, transform 0.08s;
+    transition: background 0.12s, transform 0.08s;
     -webkit-tap-highlight-color: transparent;
   }
-  .cam-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.9); }
-
-  .shutter-btn {
-    width: 76px;
-    height: 76px;
-    border: 4px solid #fff;
-    box-shadow: 0 0 0 6px rgba(255,255,255,0.25), inset 0 0 0 4px rgba(255,255,255,0.15);
-    background: rgba(255,255,255,0.12);
-    font-size: 30px;
-    border-radius: 50%;
-    transition: transform 0.08s, background 0.08s;
+  .cam-btn:active {
+    background: rgba(255,255,255,0.16);
+    transform: scale(0.91);
   }
-  .shutter-btn:active { transform: scale(0.88); background: rgba(255,255,255,0.45); }
+
+  /* ── Shutter button ── */
+  .shutter-btn {
+    width: 80px;
+    height: 80px;
+    border: 2px solid rgba(240, 235, 226, 0.85);
+    background: transparent;
+    border-radius: 50%;
+    position: relative;
+    transition: transform 0.08s;
+    font-size: 0; /* hide inner emoji */
+  }
+  .shutter-btn::after {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    background: rgba(240, 235, 226, 0.86);
+    border-radius: 50%;
+    transition: inset 0.1s, background 0.08s;
+  }
+  .shutter-btn:active {
+    transform: scale(0.89);
+  }
+  .shutter-btn:active::after {
+    inset: 10px;
+    background: #fff;
+  }
 
   /* ── Settings backdrop ── */
   #settings-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.55);
     z-index: 30;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s;
+    transition: opacity 0.3s;
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
   }
   #settings-backdrop.open {
     opacity: 1;
@@ -194,26 +280,39 @@
   #settings-drawer {
     position: absolute;
     bottom: 0; left: 0; right: 0;
-    background: #0a0a0f;
-    border-top: 3px solid #0afe6a;
-    box-shadow: 0 0 0 1px #000, 0 -4px 0 0 rgba(10,254,106,0.3);
+    background: rgba(11, 11, 15, 0.98);
+    border-top: 1px solid rgba(255,255,255,0.09);
     z-index: 31;
     transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
-    max-height: 75dvh;
+    transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 76dvh;
     display: flex;
     flex-direction: column;
-    font-family: 'Press Start 2P', monospace;
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
   }
   #settings-drawer.open { transform: translateY(0); }
 
+  /* Top accent line on drawer */
+  #settings-drawer::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 1px;
+    background: var(--accent);
+    opacity: 0.6;
+    border-radius: 1px;
+  }
+
   #drawer-handle {
-    width: 40px;
-    height: 4px;
-    background: #0afe6a;
+    width: 34px;
+    height: 3px;
+    background: rgba(255,255,255,0.15);
     border-radius: 2px;
-    margin: 10px auto 0;
-    opacity: 0.5;
+    margin: 12px auto 0;
     flex-shrink: 0;
   }
 
@@ -221,104 +320,162 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px 10px;
-    border-bottom: 1px solid rgba(10,254,106,0.2);
+    padding: 14px 20px 13px;
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
   #drawer-header span {
-    font-size: 10px;
-    color: #0afe6a;
-    letter-spacing: 2px;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--text-mid);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
   }
 
   #drawer-close {
-    background: transparent;
-    border: 2px solid rgba(255,255,255,0.3);
-    color: #fff;
-    font-size: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--text-mid);
+    font-size: 13px;
     padding: 0;
-    width: 36px;
-    height: 36px;
-    border-radius: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: inherit;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    -webkit-tap-highlight-color: transparent;
   }
-  #drawer-close:active { background: rgba(255,255,255,0.1); }
+  #drawer-close:active {
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+    border-color: rgba(255,255,255,0.2);
+  }
 
   #drawer-body {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 14px 16px;
-    padding-bottom: env(safe-area-inset-bottom, 14px);
+    padding: 6px 20px;
+    padding-bottom: calc(env(safe-area-inset-bottom, 16px) + 16px);
     display: flex;
     flex-direction: column;
-    gap: 14px;
   }
 
   /* ── Control rows ── */
   .ctrl-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 14px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
   }
+  .ctrl-row:last-child { border-bottom: none; }
 
   .ctrl-row label {
-    font-size: 7px;
-    color: #0afe6a;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--text-mid);
     white-space: nowrap;
-    min-width: 64px;
+    min-width: 68px;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.13em;
   }
 
+  /* ── Selects ── */
   select {
-    background: #111;
-    color: #fff;
-    border: 2px solid #0afe6a;
-    border-radius: 0;
-    padding: 8px 8px;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 7px;
+    background: var(--surface-3);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 30px 9px 11px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 300;
+    letter-spacing: 0.03em;
     flex: 1;
     min-width: 100px;
     cursor: pointer;
     -webkit-appearance: none;
     appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7' fill='none'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%238a8a96' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 11px center;
+    transition: border-color 0.15s;
+  }
+  select:focus {
+    outline: none;
+    border-color: var(--border-accent);
   }
 
+  /* ── Range sliders ── */
   input[type=range] {
     flex: 1;
     min-width: 80px;
-    accent-color: #0afe6a;
-    height: 4px;
+    height: 2px;
     cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--surface-3);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 0 4px var(--accent-glow), 0 1px 4px rgba(0,0,0,0.5);
+    transition: box-shadow 0.15s;
+  }
+  input[type=range]:active::-webkit-slider-thumb {
+    box-shadow: 0 0 0 6px var(--accent-soft), 0 1px 4px rgba(0,0,0,0.5);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--surface-3);
+    border-radius: 2px;
   }
 
   #sat-val, #exp-val {
-    font-size: 7px;
-    color: #0afe6a;
-    min-width: 36px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--accent);
+    min-width: 38px;
     text-align: right;
     white-space: nowrap;
+    letter-spacing: 0.03em;
   }
 
   /* ── Palette preview ── */
   #palette-preview {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px;
-    padding: 2px 0;
+    gap: 4px;
+    padding: 1px 0;
   }
 
   .pal-swatch {
-    width: 20px;
-    height: 20px;
-    border-radius: 0;
-    border: 1px solid rgba(255,255,255,0.15);
+    width: 17px;
+    height: 17px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.07);
     flex-shrink: 0;
   }
 
@@ -330,13 +487,17 @@
   }
 
   #custom-colors input[type=color] {
-    width: 32px;
-    height: 32px;
-    border: 2px solid rgba(10,254,106,0.4);
-    border-radius: 0;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
     cursor: pointer;
-    padding: 0;
-    background: none;
+    padding: 2px;
+    background: var(--surface-3);
+    transition: border-color 0.15s;
+  }
+  #custom-colors input[type=color]:hover {
+    border-color: var(--border-accent);
   }
 
   /* ── Hidden video ── */
@@ -345,10 +506,19 @@
   /* ── Responsive: landscape ── */
   @media (orientation: landscape) and (max-height: 500px) {
     #settings-drawer { max-height: 90dvh; }
-    #camera-bar { padding-bottom: 8px; padding-top: 10px; }
-    .shutter-btn { width: 60px; height: 60px; font-size: 24px; }
-    .cam-btn { width: 44px; height: 44px; font-size: 18px; }
-    #corner-tl, #corner-tr, #corner-bl, #corner-br { width: 18px; height: 18px; }
+    #camera-bar { padding-bottom: 8px; padding-top: 12px; }
+    .shutter-btn { width: 64px; height: 64px; }
+    .cam-btn { width: 42px; height: 42px; font-size: 17px; }
+    #corner-tl, #corner-tr, #corner-bl, #corner-br { width: 14px; height: 14px; }
+    #hud-title { font-size: 20px; }
+  }
+
+  /* ── Scrollbar style (webkit) ── */
+  #drawer-body::-webkit-scrollbar { width: 3px; }
+  #drawer-body::-webkit-scrollbar-track { background: transparent; }
+  #drawer-body::-webkit-scrollbar-thumb {
+    background: var(--text-dim);
+    border-radius: 2px;
   }
 </style>
 </head>
@@ -368,7 +538,8 @@
 
   <!-- Top HUD bar -->
   <div id="hud-top">
-    <div id="hud-title">&#x2593; PIXEL CAM &#x2593;</div>
+    <div id="hud-title"><em>Pixel</em> <span class="accent">Cam</span></div>
+    <div id="hud-sep"></div>
     <div id="status">Requesting camera&hellip;</div>
     <button id="settings-btn" title="Settings">&#x2699;</button>
   </div>
@@ -377,7 +548,7 @@
   <div id="camera-bar">
     <button id="flip-btn" class="cam-btn" title="Flip camera">&#x21BA;</button>
     <button id="shutter" class="cam-btn shutter-btn" title="Capture">&#x25CE;</button>
-    <button id="save-btn" class="cam-btn" title="Download last capture" style="font-size:20px">&#x2B07;</button>
+    <button id="save-btn" class="cam-btn" title="Download last capture" style="font-size:18px">&#x2B07;</button>
   </div>
 
   <!-- Settings backdrop -->
@@ -387,7 +558,7 @@
   <div id="settings-drawer">
     <div id="drawer-handle"></div>
     <div id="drawer-header">
-      <span>SETTINGS</span>
+      <span>Settings</span>
       <button id="drawer-close">&#x2715;</button>
     </div>
     <div id="drawer-body">
@@ -774,10 +945,10 @@ document.getElementById('flip-btn').addEventListener('click', () => {
 });
 
 // Settings drawer
-const settingsBtn   = document.getElementById('settings-btn');
-const settingsDrawer = document.getElementById('settings-drawer');
+const settingsBtn      = document.getElementById('settings-btn');
+const settingsDrawer   = document.getElementById('settings-drawer');
 const settingsBackdrop = document.getElementById('settings-backdrop');
-const drawerClose   = document.getElementById('drawer-close');
+const drawerClose      = document.getElementById('drawer-close');
 
 function openSettings() {
   settingsDrawer.classList.add('open');
