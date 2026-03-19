@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pixel Art Camera</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #000;
+    color: #fff;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    overflow: hidden;
+    height: 100dvh;
+    width: 100dvw;
+  }
+
+  /* ── App container ── */
+  #app {
+    position: relative;
+    width: 100dvw;
+    height: 100dvh;
+    overflow: hidden;
+    background: #000;
+  }
+
+  /* ── Viewfinder ── */
+  #viewfinder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #output {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  /* ── Scanlines overlay ── */
+  #scanlines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 3px,
+      rgba(0,0,0,0.15) 3px, rgba(0,0,0,0.15) 4px
+    );
+    z-index: 2;
+  }
+
+  /* ── Corner brackets ── */
+  .corner {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #0afe6a;
+    z-index: 3;
+    pointer-events: none;
+  }
+  #corner-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; }
+  #corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
+  #corner-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; }
+  #corner-br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+
+  /* ── Shutter flash ── */
+  #shutter-flash {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 20;
+    transition: opacity 0.05s;
+  }
+  #shutter-flash.flash { opacity: 0.7; }
+
+  /* ── Top HUD bar ── */
+  #hud-top {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: env(safe-area-inset-top, 8px) 16px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
+    z-index: 10;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+  }
+
+  #hud-title {
+    color: #0afe6a;
+    font-size: 10px;
+    text-shadow: 0 0 8px rgba(10,254,106,0.6);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  #status {
+    flex: 1;
+    font-size: 7px;
+    color: #f88;
+    text-align: center;
+    min-height: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #settings-btn {
+    margin-left: auto;
+    background: rgba(0,0,0,0.5);
+    border: 2px solid #0afe6a;
+    color: #0afe6a;
+    padding: 6px 10px;
+    font-size: 16px;
+    border-radius: 0;
+    cursor: pointer;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  #settings-btn:active { background: rgba(10,254,106,0.2); }
+
+  /* ── Bottom camera bar ── */
+  #camera-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 20px 32px env(safe-area-inset-bottom, 20px);
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    z-index: 10;
+  }
+
+  /* ── Camera buttons ── */
+  .cam-btn {
+    width: 52px;
+    height: 52px;
+    background: rgba(0,0,0,0.5);
+    border: 2px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-size: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, transform 0.08s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cam-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.9); }
+
+  .shutter-btn {
+    width: 76px;
+    height: 76px;
+    border: 4px solid #fff;
+    box-shadow: 0 0 0 6px rgba(255,255,255,0.25), inset 0 0 0 4px rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.12);
+    font-size: 30px;
+    border-radius: 50%;
+    transition: transform 0.08s, background 0.08s;
+  }
+  .shutter-btn:active { transform: scale(0.88); background: rgba(255,255,255,0.45); }
+
+  /* ── Settings backdrop ── */
+  #settings-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 30;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  #settings-backdrop.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* ── Settings drawer ── */
+  #settings-drawer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: #0a0a0f;
+    border-top: 3px solid #0afe6a;
+    box-shadow: 0 0 0 1px #000, 0 -4px 0 0 rgba(10,254,106,0.3);
+    z-index: 31;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    max-height: 75dvh;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Press Start 2P', monospace;
+  }
+  #settings-drawer.open { transform: translateY(0); }
+
+  #drawer-handle {
+    width: 40px;
+    height: 4px;
+    background: #0afe6a;
+    border-radius: 2px;
+    margin: 10px auto 0;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  #drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid rgba(10,254,106,0.2);
+    flex-shrink: 0;
+  }
+  #drawer-header span {
+    font-size: 10px;
+    color: #0afe6a;
+    letter-spacing: 2px;
+  }
+
+  #drawer-close {
+    background: transparent;
+    border: 2px solid rgba(255,255,255,0.3);
+    color: #fff;
+    font-size: 12px;
+    padding: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+  }
+  #drawer-close:active { background: rgba(255,255,255,0.1); }
+
+  #drawer-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px;
+    padding-bottom: env(safe-area-inset-bottom, 14px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ── Control rows ── */
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .ctrl-row label {
+    font-size: 7px;
+    color: #0afe6a;
+    white-space: nowrap;
+    min-width: 64px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  select {
+    background: #111;
+    color: #fff;
+    border: 2px solid #0afe6a;
+    border-radius: 0;
+    padding: 8px 8px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    flex: 1;
+    min-width: 100px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  input[type=range] {
+    flex: 1;
+    min-width: 80px;
+    accent-color: #0afe6a;
+    height: 4px;
+    cursor: pointer;
+  }
+
+  #sat-val, #exp-val {
+    font-size: 7px;
+    color: #0afe6a;
+    min-width: 36px;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* ── Palette preview ── */
+  #palette-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 2px 0;
+  }
+
+  .pal-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 0;
+    border: 1px solid rgba(255,255,255,0.15);
+    flex-shrink: 0;
+  }
+
+  /* ── Custom color pickers ── */
+  #custom-colors {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  #custom-colors input[type=color] {
+    width: 32px;
+    height: 32px;
+    border: 2px solid rgba(10,254,106,0.4);
+    border-radius: 0;
+    cursor: pointer;
+    padding: 0;
+    background: none;
+  }
+
+  /* ── Hidden video ── */
+  video { display: none; }
+
+  /* ── Responsive: landscape ── */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #settings-drawer { max-height: 90dvh; }
+    #camera-bar { padding-bottom: 8px; padding-top: 10px; }
+    .shutter-btn { width: 60px; height: 60px; font-size: 24px; }
+    .cam-btn { width: 44px; height: 44px; font-size: 18px; }
+    #corner-tl, #corner-tr, #corner-bl, #corner-br { width: 18px; height: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Viewfinder -->
+  <div id="viewfinder">
+    <canvas id="output"></canvas>
+    <div id="scanlines"></div>
+    <div id="corner-tl" class="corner"></div>
+    <div id="corner-tr" class="corner"></div>
+    <div id="corner-bl" class="corner"></div>
+    <div id="corner-br" class="corner"></div>
+    <div id="shutter-flash"></div>
+  </div>
+
+  <!-- Top HUD bar -->
+  <div id="hud-top">
+    <div id="hud-title">&#x2593; PIXEL CAM &#x2593;</div>
+    <div id="status">Requesting camera&hellip;</div>
+    <button id="settings-btn" title="Settings">&#x2699;</button>
+  </div>
+
+  <!-- Bottom camera bar -->
+  <div id="camera-bar">
+    <button id="flip-btn" class="cam-btn" title="Flip camera">&#x21BA;</button>
+    <button id="shutter" class="cam-btn shutter-btn" title="Capture">&#x25CE;</button>
+    <button id="save-btn" class="cam-btn" title="Download last capture" style="font-size:20px">&#x2B07;</button>
+  </div>
+
+  <!-- Settings backdrop -->
+  <div id="settings-backdrop"></div>
+
+  <!-- Settings drawer -->
+  <div id="settings-drawer">
+    <div id="drawer-handle"></div>
+    <div id="drawer-header">
+      <span>SETTINGS</span>
+      <button id="drawer-close">&#x2715;</button>
+    </div>
+    <div id="drawer-body">
+
+      <div class="ctrl-row">
+        <label>Aspect</label>
+        <select id="aspect-sel">
+          <option value="auto" selected>Auto</option>
+          <option value="16:9">16:9</option>
+          <option value="4:3">4:3</option>
+          <option value="3:2">3:2</option>
+          <option value="1:1">1:1</option>
+          <option value="9:16">9:16</option>
+        </select>
+      </div>
+
+      <div class="ctrl-row">
+        <label>Short side</label>
+        <select id="short-sel">
+          <option value="16">16 px</option>
+          <option value="24">24 px</option>
+          <option value="32">32 px</option>
+          <option value="45" selected>45 px</option>
+          <option value="64">64 px</option>
+          <option value="90">90 px</option>
+          <option value="128">128 px</option>
+        </select>
+      </div>
+
+      <div class="ctrl-row">
+        <label>Saturation</label>
+        <input type="range" id="sat-slider" min="0" max="300" step="5" value="100">
+        <span id="sat-val">100%</span>
+      </div>
+
+      <div class="ctrl-row">
+        <label>Exposure</label>
+        <input type="range" id="exp-slider" min="-128" max="128" step="4" value="0">
+        <span id="exp-val">0</span>
+      </div>
+
+      <div class="ctrl-row">
+        <label>Palette</label>
+        <select id="palette-sel">
+          <option value="gameboy">Game Boy (4)</option>
+          <option value="slso8">SLSO8 warm (8)</option>
+          <option value="grayscale">Grayscale (8)</option>
+          <option value="onebit">1-Bit (2)</option>
+          <option value="arne16">Arne 16</option>
+          <option value="nes">NES (16)</option>
+          <option value="cga">CGA (16)</option>
+          <option value="pico8">Pico-8 (16)</option>
+          <option value="c64">C64 (16)</option>
+          <option value="zxspectrum">ZX Spectrum (16)</option>
+          <option value="sweetie16">Sweetie 16</option>
+          <option value="db16">Dawnbringer 16</option>
+          <option value="apollo">Apollo 32</option>
+          <option value="db32">Dawnbringer 32</option>
+          <option value="endesga32">Endesga 32</option>
+          <option value="zughy32">Zughy 32</option>
+          <option value="resurrect64">Resurrect 64</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <div class="ctrl-row">
+        <label>Preview</label>
+        <div id="palette-preview"></div>
+      </div>
+
+      <div class="ctrl-row" id="custom-row" style="display:none">
+        <label>Colors</label>
+        <div id="custom-colors"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<video id="video" autoplay playsinline muted></video>
+
+<script>
+// ── Palettes ─────────────────────────────────────────────────────────────────
+const PALETTES = {
+  gameboy: [
+    [15,56,15],[48,98,48],[139,172,15],[155,188,15]
+  ],
+  nes: [
+    [0,0,0],[252,252,252],[248,0,0],[0,168,0],
+    [0,0,252],[216,0,204],[0,188,188],[252,164,0],
+    [188,0,0],[0,128,0],[0,0,188],[148,0,132],
+    [0,120,120],[168,108,0],[148,148,148],[60,60,60]
+  ],
+  cga: [
+    [0,0,0],[0,0,170],[0,170,0],[0,170,170],
+    [170,0,0],[170,0,170],[170,85,0],[170,170,170],
+    [85,85,85],[85,85,255],[85,255,85],[85,255,255],
+    [255,85,85],[255,85,255],[255,255,85],[255,255,255]
+  ],
+  pico8: [
+    [0,0,0],[29,43,83],[126,37,83],[0,135,81],
+    [171,82,54],[95,87,79],[194,195,199],[255,241,232],
+    [255,0,77],[255,163,0],[255,236,39],[0,228,54],
+    [41,173,255],[131,118,156],[255,119,168],[255,204,170]
+  ],
+  // Lospec — Sweetie 16 by GrafxKid
+  sweetie16: [
+    [26,28,44],[93,39,93],[177,62,83],[239,125,87],
+    [255,205,117],[167,240,112],[56,183,100],[37,113,121],
+    [41,54,111],[59,93,201],[65,166,246],[115,239,247],
+    [244,244,244],[148,176,194],[86,108,134],[51,60,87]
+  ],
+  // Lospec — Dawnbringer 16 by DragonDePlatino & DawnBringer
+  db16: [
+    [20,12,28],[68,36,52],[48,52,109],[78,74,78],
+    [133,76,48],[52,101,36],[208,70,72],[117,113,97],
+    [89,125,206],[210,125,44],[133,149,161],[109,170,44],
+    [210,170,153],[109,194,202],[218,212,94],[222,238,214]
+  ],
+  // Lospec — Dawnbringer 32 by DawnBringer
+  db32: [
+    [0,0,0],[34,32,52],[69,40,60],[102,57,49],
+    [143,86,59],[223,113,38],[217,160,102],[238,195,154],
+    [251,242,54],[153,229,80],[106,190,48],[55,148,110],
+    [75,105,47],[82,75,36],[50,60,57],[63,63,116],
+    [48,96,130],[91,110,225],[99,155,255],[95,205,228],
+    [203,219,252],[255,255,255],[155,173,183],[132,126,135],
+    [105,106,106],[89,86,82],[118,66,138],[172,50,50],
+    [217,87,99],[215,123,186],[143,151,74],[138,111,48]
+  ],
+  // Lospec — Endesga 32 by ENDESGA
+  endesga32: [
+    [190,74,47],[215,118,67],[234,212,170],[228,166,114],
+    [184,111,80],[115,62,57],[62,39,49],[162,38,51],
+    [228,59,68],[247,118,34],[254,174,52],[254,231,97],
+    [99,199,77],[62,137,72],[38,92,66],[25,60,62],
+    [18,78,137],[0,153,219],[44,232,245],[255,255,255],
+    [192,203,220],[139,155,180],[90,105,136],[58,68,102],
+    [38,43,68],[24,20,37],[255,0,68],[104,56,108],
+    [181,80,136],[246,117,122],[232,183,150],[194,133,105]
+  ],
+  grayscale: [
+    [0,0,0],[36,36,36],[72,72,72],[109,109,109],
+    [145,145,145],[182,182,182],[218,218,218],[255,255,255]
+  ],
+  // 1-bit monochrome
+  onebit: [
+    [0,0,0],[255,255,255]
+  ],
+  // Commodore 64
+  c64: [
+    [0,0,0],[255,255,255],[136,0,0],[170,255,238],
+    [204,68,204],[0,204,85],[0,0,170],[238,238,119],
+    [221,136,85],[102,68,0],[255,119,119],[51,51,51],
+    [119,119,119],[170,255,102],[0,136,255],[187,187,187]
+  ],
+  // ZX Spectrum
+  zxspectrum: [
+    [0,0,0],[0,0,215],[215,0,0],[215,0,215],
+    [0,215,0],[0,215,215],[215,215,0],[215,215,215],
+    [0,0,0],[0,0,255],[255,0,0],[255,0,255],
+    [0,255,0],[0,255,255],[255,255,0],[255,255,255]
+  ],
+  // Arne 16 by Arne
+  arne16: [
+    [0,0,0],[157,157,157],[255,255,255],[190,38,51],
+    [224,111,139],[73,60,43],[164,100,34],[235,137,49],
+    [247,226,107],[47,72,78],[68,137,26],[163,206,39],
+    [27,38,50],[0,87,132],[49,162,242],[178,220,239]
+  ],
+  // SLSO8 by Luis Miguel Maldonado — warm atmospheric 8-color
+  slso8: [
+    [13,43,69],[32,60,86],[84,78,104],[141,105,122],
+    [208,129,89],[255,170,94],[255,212,163],[255,236,214]
+  ],
+  // Apollo 32 by AdamCYounis
+  apollo: [
+    [14,14,17],[34,35,35],[66,60,54],[105,79,98],
+    [127,112,138],[155,171,178],[212,222,220],[255,255,255],
+    [87,26,26],[172,50,50],[217,87,99],[255,181,167],
+    [255,234,190],[204,154,69],[172,92,20],[105,40,3],
+    [35,74,0],[72,120,20],[139,183,62],[198,230,122],
+    [62,150,85],[36,100,66],[12,55,42],[0,19,25],
+    [18,48,99],[54,92,173],[101,155,227],[181,218,255],
+    [136,93,167],[88,48,118],[43,17,66],[210,148,206]
+  ],
+  // Lospec — Zughy 32 by Zughy
+  zughy32: [
+    [40,24,36],[68,44,52],[104,72,76],[148,104,104],
+    [200,148,148],[228,196,196],[255,255,255],[252,216,168],
+    [228,164,116],[196,108,72],[152,64,52],[108,36,36],
+    [68,28,36],[32,20,28],[72,52,52],[108,84,68],
+    [148,120,96],[184,160,128],[56,72,32],[88,108,44],
+    [136,160,72],[192,212,120],[244,252,192],[180,228,156],
+    [96,180,128],[44,132,100],[28,84,76],[24,52,64],
+    [36,80,108],[68,132,168],[116,180,212],[168,216,244]
+  ],
+  // Lospec — Resurrect 64 by Kerrie Lake (first 32 shown in preview)
+  resurrect64: [
+    [44,33,55],[18,83,89],[116,164,45],[229,234,180],
+    [39,19,34],[79,23,64],[132,45,78],[195,106,106],
+    [234,190,190],[255,239,176],[234,137,64],[198,83,45],
+    [137,40,30],[78,16,16],[40,5,5],[188,74,155],
+    [155,62,130],[109,58,108],[63,45,82],[33,24,51],
+    [35,65,122],[64,105,176],[129,165,219],[200,219,244],
+    [14,36,70],[16,61,88],[34,107,127],[74,160,140],
+    [131,193,169],[195,221,208],[234,245,232],[244,255,244],
+    [88,20,12],[140,42,26],[182,88,52],[218,148,100],
+    [252,194,154],[255,224,186],[255,247,215],[196,156,119],
+    [148,116,91],[104,84,66],[68,56,44],[44,36,28],
+    [28,24,20],[56,40,32],[92,68,52],[140,104,80],
+    [188,148,120],[228,192,168],[248,220,196],[220,180,152],
+    [168,128,104],[124,88,72],[88,60,52],[60,40,36],
+    [36,24,24],[20,12,16],[88,100,124],[124,136,164],
+    [164,172,196],[200,208,228],[228,232,244],[244,248,252],
+    [20,28,52],[40,52,80],[72,84,116],[108,120,148]
+  ]
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let saturation = 1.0; // multiplier (1.0 = original)
+let exposure = 0;     // pixel offset -128..128
+let targetShortSide = 45; // pixel-art pixel count on the shorter output dimension
+let aspectKey = 'auto';   // 'auto' or 'W:H' string
+let currentPalette = PALETTES.gameboy;
+let customColors = ['#ff0000','#ff8800','#ffff00','#00cc00','#0088ff','#8800ff','#ffffff','#000000'];
+let facingMode = 'environment';
+let stream = null;
+let animFrame = null;
+let lastBlob = null;
+
+// ── Elements ──────────────────────────────────────────────────────────────────
+const video    = document.getElementById('video');
+const output   = document.getElementById('output');
+const ctx      = output.getContext('2d', { willReadFrequently: true });
+const status   = document.getElementById('status');
+const aspectSel = document.getElementById('aspect-sel');
+const shortSel  = document.getElementById('short-sel');
+const palSel   = document.getElementById('palette-sel');
+const custRow  = document.getElementById('custom-row');
+const custWrap = document.getElementById('custom-colors');
+
+// Offscreen canvas for reading video pixels
+const offscreen = document.createElement('canvas');
+const offCtx    = offscreen.getContext('2d', { willReadFrequently: true });
+
+// ── Custom color pickers ───────────────────────────────────────────────────────
+function buildColorPickers() {
+  custWrap.innerHTML = '';
+  customColors.forEach((c, i) => {
+    const inp = document.createElement('input');
+    inp.type = 'color';
+    inp.value = c;
+    inp.title = `Color ${i+1}`;
+    inp.addEventListener('input', () => {
+      customColors[i] = inp.value;
+      if (palSel.value === 'custom') {
+        rebuildCustomPalette();
+        updatePalettePreview(currentPalette);
+      }
+    });
+    custWrap.appendChild(inp);
+  });
+}
+
+function rebuildCustomPalette() {
+  currentPalette = customColors.map(hex => hexToRgb(hex));
+}
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+buildColorPickers();
+
+// ── Palette preview ────────────────────────────────────────────────────────────
+const palPreview = document.getElementById('palette-preview');
+
+function updatePalettePreview(palette) {
+  palPreview.innerHTML = '';
+  palette.forEach(([r, g, b]) => {
+    const swatch = document.createElement('div');
+    swatch.className = 'pal-swatch';
+    swatch.style.background = `rgb(${r},${g},${b})`;
+    swatch.title = `rgb(${r},${g},${b})`;
+    palPreview.appendChild(swatch);
+  });
+}
+
+// ── Saturation boost ──────────────────────────────────────────────────────────
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r)      h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else                h = (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+function hue2rgb(p, q, t) {
+  if (t < 0) t += 1;
+  if (t > 1) t -= 1;
+  if (t < 1/6) return p + (q - p) * 6 * t;
+  if (t < 1/2) return q;
+  if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+  return p;
+}
+
+function hslToRgb(h, s, l) {
+  if (s === 0) { const v = Math.round(l * 255); return [v, v, v]; }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return [
+    Math.round(hue2rgb(p, q, h + 1/3) * 255),
+    Math.round(hue2rgb(p, q, h) * 255),
+    Math.round(hue2rgb(p, q, h - 1/3) * 255)
+  ];
+}
+
+function boostSaturation(r, g, b, factor) {
+  if (factor === 1.0) return [r, g, b];
+  const [h, s, l] = rgbToHsl(r, g, b);
+  return hslToRgb(h, Math.min(1, s * factor), l);
+}
+
+// ── Nearest palette color (Euclidean RGB) ─────────────────────────────────────
+function nearestColor(r, g, b, palette) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const [pr, pg, pb] = palette[i];
+    const dr = r - pr, dg = g - pg, db = b - pb;
+    const d = dr*dr + dg*dg + db*db;
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return palette[best];
+}
+
+// ── Compute cropped output dimensions from aspect ratio ────────────────────────
+function outputDims(vw, vh) {
+  if (aspectKey === 'auto') return [vw, vh, 0, 0];
+  const [aw, ah] = aspectKey.split(':').map(Number);
+  const target = aw / ah;
+  const actual = vw / vh;
+  let ow, oh;
+  if (actual > target) { oh = vh; ow = Math.round(vh * target); }
+  else                 { ow = vw; oh = Math.round(vw / target); }
+  return [ow, oh, Math.floor((vw - ow) / 2), Math.floor((vh - oh) / 2)];
+}
+
+// ── Pixel art render loop ──────────────────────────────────────────────────────
+function renderFrame() {
+  animFrame = requestAnimationFrame(renderFrame);
+
+  if (video.readyState < 2) return;
+
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return;
+
+  const [ow, oh, ox, oy] = outputDims(vw, vh);
+
+  // Match output canvas to cropped dimensions
+  if (output.width !== ow || output.height !== oh) {
+    output.width  = ow;
+    output.height = oh;
+  }
+  if (offscreen.width !== vw || offscreen.height !== vh) {
+    offscreen.width  = vw;
+    offscreen.height = vh;
+  }
+
+  // Draw video frame to offscreen for pixel sampling
+  offCtx.drawImage(video, 0, 0, vw, vh);
+
+  const bs = Math.max(1, Math.round(Math.min(ow, oh) / targetShortSide));
+  const cols = Math.ceil(ow / bs);
+  const rows = Math.ceil(oh / bs);
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      // Sample center of each block (offset by crop origin)
+      const sx = Math.min(ox + col * bs + (bs >> 1), vw - 1);
+      const sy = Math.min(oy + row * bs + (bs >> 1), vh - 1);
+      const px = offCtx.getImageData(sx, sy, 1, 1).data;
+      const [sr, sg, sb] = boostSaturation(px[0], px[1], px[2], saturation);
+      const er = Math.max(0, Math.min(255, sr + exposure));
+      const eg = Math.max(0, Math.min(255, sg + exposure));
+      const eb = Math.max(0, Math.min(255, sb + exposure));
+      const [nr, ng, nb] = nearestColor(er, eg, eb, currentPalette);
+      ctx.fillStyle = `rgb(${nr},${ng},${nb})`;
+      ctx.fillRect(col * bs, row * bs, bs, bs);
+    }
+  }
+}
+
+// ── Camera setup ───────────────────────────────────────────────────────────────
+async function startCamera(facing) {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+
+  status.textContent = 'Requesting camera\u2026';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+  } catch (e) {
+    if (facing === 'environment') {
+      // Fall back to any/front camera
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } catch (e2) {
+        status.textContent = 'Camera error: ' + e2.message;
+        return;
+      }
+    } else {
+      status.textContent = 'Camera error: ' + e.message;
+      return;
+    }
+  }
+
+  video.srcObject = stream;
+  await video.play();
+  status.textContent = '';
+  renderFrame();
+}
+
+// ── Controls ───────────────────────────────────────────────────────────────────
+aspectSel.addEventListener('change', () => { aspectKey = aspectSel.value; });
+shortSel.addEventListener('change',  () => { targetShortSide = parseInt(shortSel.value); });
+
+const satSlider = document.getElementById('sat-slider');
+const satVal    = document.getElementById('sat-val');
+satSlider.addEventListener('input', () => {
+  saturation = parseInt(satSlider.value) / 100;
+  satVal.textContent = satSlider.value + '%';
+});
+
+const expSlider = document.getElementById('exp-slider');
+const expVal    = document.getElementById('exp-val');
+expSlider.addEventListener('input', () => {
+  exposure = parseInt(expSlider.value);
+  expVal.textContent = (exposure >= 0 ? '+' : '') + exposure;
+});
+
+palSel.addEventListener('change', () => {
+  const v = palSel.value;
+  if (v === 'custom') {
+    custRow.style.display = 'flex';
+    rebuildCustomPalette();
+    updatePalettePreview(currentPalette);
+  } else {
+    custRow.style.display = 'none';
+    currentPalette = PALETTES[v];
+    updatePalettePreview(currentPalette);
+  }
+});
+
+document.getElementById('flip-btn').addEventListener('click', () => {
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  startCamera(facingMode);
+});
+
+// Settings drawer
+const settingsBtn   = document.getElementById('settings-btn');
+const settingsDrawer = document.getElementById('settings-drawer');
+const settingsBackdrop = document.getElementById('settings-backdrop');
+const drawerClose   = document.getElementById('drawer-close');
+
+function openSettings() {
+  settingsDrawer.classList.add('open');
+  settingsBackdrop.classList.add('open');
+}
+
+function closeSettings() {
+  settingsDrawer.classList.remove('open');
+  settingsBackdrop.classList.remove('open');
+}
+
+settingsBtn.addEventListener('click', openSettings);
+drawerClose.addEventListener('click', closeSettings);
+settingsBackdrop.addEventListener('click', closeSettings);
+
+// Shutter with flash
+const shutterFlash = document.getElementById('shutter-flash');
+
+document.getElementById('shutter').addEventListener('click', () => {
+  // Flash effect
+  shutterFlash.classList.add('flash');
+  setTimeout(() => shutterFlash.classList.remove('flash'), 150);
+
+  output.toBlob(blob => {
+    lastBlob = blob;
+    triggerDownload(blob);
+  }, 'image/png');
+});
+
+document.getElementById('save-btn').addEventListener('click', () => {
+  if (lastBlob) triggerDownload(lastBlob);
+  else status.textContent = 'No capture yet \u2014 press shutter first.';
+});
+
+function triggerDownload(blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pixel-${Date.now()}.png`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+updatePalettePreview(currentPalette);
+startCamera(facingMode);
+</script>
+</body>
+</html>
