@@ -1,0 +1,23 @@
+{
+  "default": "wide128",
+  "palettes": [
+    { "slug": "wide128",     "name": "AAP-Splendor 128",  "author": "Adigun A. Polack" },
+    { "slug": "gameboy",     "name": "Game Boy (4)" },
+    { "slug": "slso8",       "name": "SLSO8 warm (8)",    "author": "Luis Miguel Maldonado" },
+    { "slug": "grayscale",   "name": "Grayscale (8)" },
+    { "slug": "onebit",      "name": "1-Bit (2)" },
+    { "slug": "arne16",      "name": "Arne 16",           "author": "Arne" },
+    { "slug": "nes",         "name": "NES (16)" },
+    { "slug": "cga",         "name": "CGA (16)" },
+    { "slug": "pico8",       "name": "Pico-8 (16)" },
+    { "slug": "c64",         "name": "C64 (16)" },
+    { "slug": "zxspectrum",  "name": "ZX Spectrum (16)" },
+    { "slug": "sweetie16",   "name": "Sweetie 16",        "author": "GrafxKid" },
+    { "slug": "db16",        "name": "Dawnbringer 16",    "author": "DragonDePlatino & DawnBringer" },
+    { "slug": "apollo",      "name": "Apollo 32",         "author": "AdamCYounis" },
+    { "slug": "db32",        "name": "Dawnbringer 32",    "author": "DawnBringer" },
+    { "slug": "endesga32",   "name": "Endesga 32",        "author": "ENDESGA" },
+    { "slug": "zughy32",     "name": "Zughy 32",          "author": "Zughy" },
+    { "slug": "resurrect64", "name": "Resurrect 64",      "author": "Kerrie Lake" }
+  ]
+}

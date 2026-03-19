@@ -395,11 +395,11 @@
       <div class="ctrl-row">
         <label>Aspect</label>
         <select id="aspect-sel">
-          <option value="auto" selected>Auto</option>
+          <option value="auto">Auto</option>
           <option value="16:9">16:9</option>
           <option value="4:3">4:3</option>
           <option value="3:2">3:2</option>
-          <option value="1:1">1:1</option>
+          <option value="1:1" selected>1:1</option>
           <option value="9:16">9:16</option>
         </select>
       </div>
@@ -410,8 +410,8 @@
           <option value="16">16 px</option>
           <option value="24">24 px</option>
           <option value="32">32 px</option>
-          <option value="45" selected>45 px</option>
-          <option value="64">64 px</option>
+          <option value="45">45 px</option>
+          <option value="64" selected>64 px</option>
           <option value="90">90 px</option>
           <option value="128">128 px</option>
         </select>
@@ -432,24 +432,7 @@
       <div class="ctrl-row">
         <label>Palette</label>
         <select id="palette-sel">
-          <option value="gameboy">Game Boy (4)</option>
-          <option value="slso8">SLSO8 warm (8)</option>
-          <option value="grayscale">Grayscale (8)</option>
-          <option value="onebit">1-Bit (2)</option>
-          <option value="arne16">Arne 16</option>
-          <option value="nes">NES (16)</option>
-          <option value="cga">CGA (16)</option>
-          <option value="pico8">Pico-8 (16)</option>
-          <option value="c64">C64 (16)</option>
-          <option value="zxspectrum">ZX Spectrum (16)</option>
-          <option value="sweetie16">Sweetie 16</option>
-          <option value="db16">Dawnbringer 16</option>
-          <option value="apollo">Apollo 32</option>
-          <option value="db32">Dawnbringer 32</option>
-          <option value="endesga32">Endesga 32</option>
-          <option value="zughy32">Zughy 32</option>
-          <option value="resurrect64">Resurrect 64</option>
-          <option value="custom">Custom</option>
+          <!-- populated by initApp() from palettes/manifest.json -->
         </select>
       </div>
 
@@ -470,149 +453,14 @@
 <video id="video" autoplay playsinline muted></video>
 
 <script>
-// ── Palettes ─────────────────────────────────────────────────────────────────
-const PALETTES = {
-  gameboy: [
-    [15,56,15],[48,98,48],[139,172,15],[155,188,15]
-  ],
-  nes: [
-    [0,0,0],[252,252,252],[248,0,0],[0,168,0],
-    [0,0,252],[216,0,204],[0,188,188],[252,164,0],
-    [188,0,0],[0,128,0],[0,0,188],[148,0,132],
-    [0,120,120],[168,108,0],[148,148,148],[60,60,60]
-  ],
-  cga: [
-    [0,0,0],[0,0,170],[0,170,0],[0,170,170],
-    [170,0,0],[170,0,170],[170,85,0],[170,170,170],
-    [85,85,85],[85,85,255],[85,255,85],[85,255,255],
-    [255,85,85],[255,85,255],[255,255,85],[255,255,255]
-  ],
-  pico8: [
-    [0,0,0],[29,43,83],[126,37,83],[0,135,81],
-    [171,82,54],[95,87,79],[194,195,199],[255,241,232],
-    [255,0,77],[255,163,0],[255,236,39],[0,228,54],
-    [41,173,255],[131,118,156],[255,119,168],[255,204,170]
-  ],
-  // Lospec — Sweetie 16 by GrafxKid
-  sweetie16: [
-    [26,28,44],[93,39,93],[177,62,83],[239,125,87],
-    [255,205,117],[167,240,112],[56,183,100],[37,113,121],
-    [41,54,111],[59,93,201],[65,166,246],[115,239,247],
-    [244,244,244],[148,176,194],[86,108,134],[51,60,87]
-  ],
-  // Lospec — Dawnbringer 16 by DragonDePlatino & DawnBringer
-  db16: [
-    [20,12,28],[68,36,52],[48,52,109],[78,74,78],
-    [133,76,48],[52,101,36],[208,70,72],[117,113,97],
-    [89,125,206],[210,125,44],[133,149,161],[109,170,44],
-    [210,170,153],[109,194,202],[218,212,94],[222,238,214]
-  ],
-  // Lospec — Dawnbringer 32 by DawnBringer
-  db32: [
-    [0,0,0],[34,32,52],[69,40,60],[102,57,49],
-    [143,86,59],[223,113,38],[217,160,102],[238,195,154],
-    [251,242,54],[153,229,80],[106,190,48],[55,148,110],
-    [75,105,47],[82,75,36],[50,60,57],[63,63,116],
-    [48,96,130],[91,110,225],[99,155,255],[95,205,228],
-    [203,219,252],[255,255,255],[155,173,183],[132,126,135],
-    [105,106,106],[89,86,82],[118,66,138],[172,50,50],
-    [217,87,99],[215,123,186],[143,151,74],[138,111,48]
-  ],
-  // Lospec — Endesga 32 by ENDESGA
-  endesga32: [
-    [190,74,47],[215,118,67],[234,212,170],[228,166,114],
-    [184,111,80],[115,62,57],[62,39,49],[162,38,51],
-    [228,59,68],[247,118,34],[254,174,52],[254,231,97],
-    [99,199,77],[62,137,72],[38,92,66],[25,60,62],
-    [18,78,137],[0,153,219],[44,232,245],[255,255,255],
-    [192,203,220],[139,155,180],[90,105,136],[58,68,102],
-    [38,43,68],[24,20,37],[255,0,68],[104,56,108],
-    [181,80,136],[246,117,122],[232,183,150],[194,133,105]
-  ],
-  grayscale: [
-    [0,0,0],[36,36,36],[72,72,72],[109,109,109],
-    [145,145,145],[182,182,182],[218,218,218],[255,255,255]
-  ],
-  // 1-bit monochrome
-  onebit: [
-    [0,0,0],[255,255,255]
-  ],
-  // Commodore 64
-  c64: [
-    [0,0,0],[255,255,255],[136,0,0],[170,255,238],
-    [204,68,204],[0,204,85],[0,0,170],[238,238,119],
-    [221,136,85],[102,68,0],[255,119,119],[51,51,51],
-    [119,119,119],[170,255,102],[0,136,255],[187,187,187]
-  ],
-  // ZX Spectrum
-  zxspectrum: [
-    [0,0,0],[0,0,215],[215,0,0],[215,0,215],
-    [0,215,0],[0,215,215],[215,215,0],[215,215,215],
-    [0,0,0],[0,0,255],[255,0,0],[255,0,255],
-    [0,255,0],[0,255,255],[255,255,0],[255,255,255]
-  ],
-  // Arne 16 by Arne
-  arne16: [
-    [0,0,0],[157,157,157],[255,255,255],[190,38,51],
-    [224,111,139],[73,60,43],[164,100,34],[235,137,49],
-    [247,226,107],[47,72,78],[68,137,26],[163,206,39],
-    [27,38,50],[0,87,132],[49,162,242],[178,220,239]
-  ],
-  // SLSO8 by Luis Miguel Maldonado — warm atmospheric 8-color
-  slso8: [
-    [13,43,69],[32,60,86],[84,78,104],[141,105,122],
-    [208,129,89],[255,170,94],[255,212,163],[255,236,214]
-  ],
-  // Apollo 32 by AdamCYounis
-  apollo: [
-    [14,14,17],[34,35,35],[66,60,54],[105,79,98],
-    [127,112,138],[155,171,178],[212,222,220],[255,255,255],
-    [87,26,26],[172,50,50],[217,87,99],[255,181,167],
-    [255,234,190],[204,154,69],[172,92,20],[105,40,3],
-    [35,74,0],[72,120,20],[139,183,62],[198,230,122],
-    [62,150,85],[36,100,66],[12,55,42],[0,19,25],
-    [18,48,99],[54,92,173],[101,155,227],[181,218,255],
-    [136,93,167],[88,48,118],[43,17,66],[210,148,206]
-  ],
-  // Lospec — Zughy 32 by Zughy
-  zughy32: [
-    [40,24,36],[68,44,52],[104,72,76],[148,104,104],
-    [200,148,148],[228,196,196],[255,255,255],[252,216,168],
-    [228,164,116],[196,108,72],[152,64,52],[108,36,36],
-    [68,28,36],[32,20,28],[72,52,52],[108,84,68],
-    [148,120,96],[184,160,128],[56,72,32],[88,108,44],
-    [136,160,72],[192,212,120],[244,252,192],[180,228,156],
-    [96,180,128],[44,132,100],[28,84,76],[24,52,64],
-    [36,80,108],[68,132,168],[116,180,212],[168,216,244]
-  ],
-  // Lospec — Resurrect 64 by Kerrie Lake (first 32 shown in preview)
-  resurrect64: [
-    [44,33,55],[18,83,89],[116,164,45],[229,234,180],
-    [39,19,34],[79,23,64],[132,45,78],[195,106,106],
-    [234,190,190],[255,239,176],[234,137,64],[198,83,45],
-    [137,40,30],[78,16,16],[40,5,5],[188,74,155],
-    [155,62,130],[109,58,108],[63,45,82],[33,24,51],
-    [35,65,122],[64,105,176],[129,165,219],[200,219,244],
-    [14,36,70],[16,61,88],[34,107,127],[74,160,140],
-    [131,193,169],[195,221,208],[234,245,232],[244,255,244],
-    [88,20,12],[140,42,26],[182,88,52],[218,148,100],
-    [252,194,154],[255,224,186],[255,247,215],[196,156,119],
-    [148,116,91],[104,84,66],[68,56,44],[44,36,28],
-    [28,24,20],[56,40,32],[92,68,52],[140,104,80],
-    [188,148,120],[228,192,168],[248,220,196],[220,180,152],
-    [168,128,104],[124,88,72],[88,60,52],[60,40,36],
-    [36,24,24],[20,12,16],[88,100,124],[124,136,164],
-    [164,172,196],[200,208,228],[228,232,244],[244,248,252],
-    [20,28,52],[40,52,80],[72,84,116],[108,120,148]
-  ]
-};
-
 // ── State ─────────────────────────────────────────────────────────────────────
 let saturation = 1.0; // multiplier (1.0 = original)
 let exposure = 0;     // pixel offset -128..128
-let targetShortSide = 45; // pixel-art pixel count on the shorter output dimension
-let aspectKey = 'auto';   // 'auto' or 'W:H' string
-let currentPalette = PALETTES.gameboy;
+let targetShortSide = 64; // pixel-art pixel count on the shorter output dimension
+let aspectKey = '1:1';    // 'auto' or 'W:H' string
+const loadedPalettes = {};
+let manifest = null;
+let currentPalette = [];
 let customColors = ['#ff0000','#ff8800','#ffff00','#00cc00','#0088ff','#8800ff','#ffffff','#000000'];
 let facingMode = 'environment';
 let stream = null;
@@ -660,6 +508,23 @@ function rebuildCustomPalette() {
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function parseHex(text) {
+  return text.trim().split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length === 6)
+    .map(l => [parseInt(l.slice(0,2),16), parseInt(l.slice(2,4),16), parseInt(l.slice(4,6),16)]);
+}
+
+async function loadPalette(slug) {
+  if (loadedPalettes[slug]) return loadedPalettes[slug];
+  const res = await fetch(`palettes/${slug}.hex`);
+  if (!res.ok) throw new Error(`Failed to load palette: ${slug}`);
+  const colors = parseHex(await res.text());
+  if (!colors.length) throw new Error(`Palette ${slug} is empty`);
+  loadedPalettes[slug] = colors;
+  return colors;
 }
 
 buildColorPickers();
@@ -842,7 +707,7 @@ expSlider.addEventListener('input', () => {
   expVal.textContent = (exposure >= 0 ? '+' : '') + exposure;
 });
 
-palSel.addEventListener('change', () => {
+palSel.addEventListener('change', async () => {
   const v = palSel.value;
   if (v === 'custom') {
     custRow.style.display = 'flex';
@@ -850,8 +715,16 @@ palSel.addEventListener('change', () => {
     updatePalettePreview(currentPalette);
   } else {
     custRow.style.display = 'none';
-    currentPalette = PALETTES[v];
-    updatePalettePreview(currentPalette);
+    if (!loadedPalettes[v]) { status.textContent = 'Loading\u2026'; palSel.disabled = true; }
+    try {
+      currentPalette = await loadPalette(v);
+      updatePalettePreview(currentPalette);
+    } catch (e) {
+      status.textContent = e.message;
+    } finally {
+      palSel.disabled = false;
+      if (status.textContent === 'Loading\u2026') status.textContent = '';
+    }
   }
 });
 
@@ -888,10 +761,15 @@ document.getElementById('shutter').addEventListener('click', () => {
   shutterFlash.classList.add('flash');
   setTimeout(() => shutterFlash.classList.remove('flash'), 150);
 
-  output.toBlob(blob => {
-    lastBlob = blob;
-    triggerDownload(blob);
-  }, 'image/png');
+  // Trigger download synchronously within the user gesture (required on iOS Safari)
+  const dataUrl = output.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = `pixel-${Date.now()}.png`;
+  a.click();
+
+  // Store blob for the save button
+  output.toBlob(blob => { lastBlob = blob; }, 'image/png');
 });
 
 document.getElementById('save-btn').addEventListener('click', () => {
@@ -909,8 +787,35 @@ function triggerDownload(blob) {
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
-updatePalettePreview(currentPalette);
-startCamera(facingMode);
+async function initApp() {
+  status.textContent = 'Loading\u2026';
+  try {
+    manifest = await (await fetch('palettes/manifest.json')).json();
+  } catch (e) {
+    status.textContent = 'Failed to load palette manifest.'; return;
+  }
+  // Build dropdown
+  palSel.innerHTML = '';
+  for (const p of manifest.palettes) {
+    const opt = document.createElement('option');
+    opt.value = p.slug;
+    opt.textContent = p.name;
+    if (p.slug === manifest.default) opt.selected = true;
+    palSel.appendChild(opt);
+  }
+  const customOpt = document.createElement('option');
+  customOpt.value = 'custom'; customOpt.textContent = 'Custom';
+  palSel.appendChild(customOpt);
+  // Load default palette before camera starts
+  try {
+    currentPalette = await loadPalette(manifest.default);
+  } catch (e) {
+    status.textContent = e.message; return;
+  }
+  updatePalettePreview(currentPalette);
+  startCamera(facingMode);
+}
+initApp();
 </script>
 </body>
 </html>
