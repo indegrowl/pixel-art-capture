@@ -430,6 +430,14 @@
       </div>
 
       <div class="ctrl-row">
+        <label>Filter</label>
+        <select id="filter-sel">
+          <option value="center" selected>Center Sample</option>
+          <option value="majority">Majority Vote</option>
+        </select>
+      </div>
+
+      <div class="ctrl-row">
         <label>Palette</label>
         <select id="palette-sel">
           <!-- populated by initApp() from palettes/manifest.json -->
@@ -461,6 +469,7 @@ let aspectKey = '1:1';    // 'auto' or 'W:H' string
 const loadedPalettes = {};
 let manifest = null;
 let currentPalette = [];
+let filterMode = 'center';
 let customColors = ['#ff0000','#ff8800','#ffff00','#00cc00','#0088ff','#8800ff','#ffffff','#000000'];
 let facingMode = 'environment';
 let stream = null;
@@ -596,6 +605,17 @@ function nearestColor(r, g, b, palette) {
   return palette[best];
 }
 
+function nearestColorIndex(r, g, b, palette) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const [pr, pg, pb] = palette[i];
+    const dr = r - pr, dg = g - pg, db = b - pb;
+    const d = dr*dr + dg*dg + db*db;
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
 // ── Compute cropped output dimensions from aspect ratio ────────────────────────
 function outputDims(vw, vh) {
   if (aspectKey === 'auto') return [vw, vh, 0, 0];
@@ -609,37 +629,9 @@ function outputDims(vw, vh) {
 }
 
 // ── Pixel art render loop ──────────────────────────────────────────────────────
-function renderFrame() {
-  animFrame = requestAnimationFrame(renderFrame);
-
-  if (video.readyState < 2) return;
-
-  const vw = video.videoWidth;
-  const vh = video.videoHeight;
-  if (!vw || !vh) return;
-
-  const [ow, oh, ox, oy] = outputDims(vw, vh);
-
-  // Match output canvas to cropped dimensions
-  if (output.width !== ow || output.height !== oh) {
-    output.width  = ow;
-    output.height = oh;
-  }
-  if (offscreen.width !== vw || offscreen.height !== vh) {
-    offscreen.width  = vw;
-    offscreen.height = vh;
-  }
-
-  // Draw video frame to offscreen for pixel sampling
-  offCtx.drawImage(video, 0, 0, vw, vh);
-
-  const bs = Math.max(1, Math.round(Math.min(ow, oh) / targetShortSide));
-  const cols = Math.ceil(ow / bs);
-  const rows = Math.ceil(oh / bs);
-
+function drawCenter(ow, oh, ox, oy, bs, cols, rows, vw, vh) {
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      // Sample center of each block (offset by crop origin)
       const sx = Math.min(ox + col * bs + (bs >> 1), vw - 1);
       const sy = Math.min(oy + row * bs + (bs >> 1), vh - 1);
       const px = offCtx.getImageData(sx, sy, 1, 1).data;
@@ -651,6 +643,51 @@ function renderFrame() {
       ctx.fillStyle = `rgb(${nr},${ng},${nb})`;
       ctx.fillRect(col * bs, row * bs, bs, bs);
     }
+  }
+}
+
+function drawMajority(ow, oh, ox, oy, bs, cols, rows) {
+  // Read the entire crop region in one call — much cheaper than per-pixel getImageData
+  const imgData = offCtx.getImageData(ox, oy, ow, oh).data;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const votes = new Int32Array(currentPalette.length);
+      const x0 = col * bs, y0 = row * bs;
+      const x1 = Math.min(x0 + bs, ow), y1 = Math.min(y0 + bs, oh);
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * ow + x) * 4;
+          const [sr, sg, sb] = boostSaturation(imgData[i], imgData[i+1], imgData[i+2], saturation);
+          const er = Math.max(0, Math.min(255, sr + exposure));
+          const eg = Math.max(0, Math.min(255, sg + exposure));
+          const eb = Math.max(0, Math.min(255, sb + exposure));
+          votes[nearestColorIndex(er, eg, eb, currentPalette)]++;
+        }
+      }
+      let best = 0;
+      for (let i = 1; i < votes.length; i++) if (votes[i] > votes[best]) best = i;
+      const [nr, ng, nb] = currentPalette[best];
+      ctx.fillStyle = `rgb(${nr},${ng},${nb})`;
+      ctx.fillRect(col * bs, row * bs, bs, bs);
+    }
+  }
+}
+
+function renderFrame() {
+  animFrame = requestAnimationFrame(renderFrame);
+  if (video.readyState < 2) return;
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return;
+  const [ow, oh, ox, oy] = outputDims(vw, vh);
+  if (output.width !== ow || output.height !== oh) { output.width = ow; output.height = oh; }
+  if (offscreen.width !== vw || offscreen.height !== vh) { offscreen.width = vw; offscreen.height = vh; }
+  offCtx.drawImage(video, 0, 0, vw, vh);
+  const bs = Math.max(1, Math.round(Math.min(ow, oh) / targetShortSide));
+  const cols = Math.ceil(ow / bs), rows = Math.ceil(oh / bs);
+  if (filterMode === 'majority') {
+    drawMajority(ow, oh, ox, oy, bs, cols, rows);
+  } else {
+    drawCenter(ow, oh, ox, oy, bs, cols, rows, vw, vh);
   }
 }
 
@@ -706,6 +743,9 @@ expSlider.addEventListener('input', () => {
   exposure = parseInt(expSlider.value);
   expVal.textContent = (exposure >= 0 ? '+' : '') + exposure;
 });
+
+const filterSel = document.getElementById('filter-sel');
+filterSel.addEventListener('change', () => { filterMode = filterSel.value; });
 
 palSel.addEventListener('change', async () => {
   const v = palSel.value;
