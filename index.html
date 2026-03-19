@@ -3,358 +3,474 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Pixel Art Camera</title>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<title>Pixel Camera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --accent:       #C8922A;
+  --accent-glow:  rgba(200,146,42,0.14);
+  --accent-dim:   rgba(200,146,42,0.28);
+  --text:         #EDE8DF;
+  --text-muted:   rgba(237,232,223,0.42);
+  --text-faint:   rgba(237,232,223,0.08);
+  --surface:      rgba(9,8,7,0.97);
+  --border:       rgba(200,146,42,0.22);
+  --border-sub:   rgba(237,232,223,0.06);
+  --font-d:       'Syne', sans-serif;
+  --font-m:       'JetBrains Mono', monospace;
+}
 
-  body {
-    background: #000;
-    color: #fff;
-    font-family: 'Press Start 2P', 'Courier New', monospace;
-    overflow: hidden;
-    height: 100dvh;
-    width: 100dvw;
-  }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  /* ── App container ── */
-  #app {
-    position: relative;
-    width: 100dvw;
-    height: 100dvh;
-    overflow: hidden;
-    background: #000;
-  }
+body {
+  background: #050504;
+  color: var(--text);
+  font-family: var(--font-m);
+  overflow: hidden;
+  height: 100dvh;
+  width: 100dvw;
+  -webkit-font-smoothing: antialiased;
+}
 
-  /* ── Viewfinder ── */
-  #viewfinder {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+/* ── App ── */
+#app {
+  position: relative;
+  width: 100dvw;
+  height: 100dvh;
+  overflow: hidden;
+  background: #050504;
+}
 
-  #output {
-    display: block;
-    max-width: 100%;
-    max-height: 100%;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-  }
+/* ── Viewfinder ── */
+#viewfinder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
-  /* ── Scanlines overlay ── */
-  #scanlines {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: repeating-linear-gradient(
-      to bottom,
-      transparent 0px, transparent 3px,
-      rgba(0,0,0,0.15) 3px, rgba(0,0,0,0.15) 4px
-    );
-    z-index: 2;
-  }
+#output {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
 
-  /* ── Corner brackets ── */
-  .corner {
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    border: 3px solid #0afe6a;
-    z-index: 3;
-    pointer-events: none;
-  }
-  #corner-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; }
-  #corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
-  #corner-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; }
-  #corner-br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+/* Vignette */
+#viewfinder::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 85% 85% at 50% 50%, transparent 38%, rgba(0,0,0,0.6) 100%);
+  z-index: 1;
+}
 
-  /* ── Shutter flash ── */
-  #shutter-flash {
-    position: absolute;
-    inset: 0;
-    background: #fff;
-    opacity: 0;
-    pointer-events: none;
-    z-index: 20;
-    transition: opacity 0.05s;
-  }
-  #shutter-flash.flash { opacity: 0.7; }
+/* ── Scanlines ── */
+#scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px, transparent 2px,
+    rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 3px
+  );
+  z-index: 2;
+}
 
-  /* ── Top HUD bar ── */
-  #hud-top {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    padding: env(safe-area-inset-top, 8px) 16px 14px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
-    z-index: 10;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-  }
+/* ── Corner brackets ── */
+@keyframes bracket-breathe {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 0.85; }
+}
 
-  #hud-title {
-    color: #0afe6a;
-    font-size: 10px;
-    text-shadow: 0 0 8px rgba(10,254,106,0.6);
-    letter-spacing: 1px;
-    white-space: nowrap;
-  }
+.corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: var(--accent);
+  border-style: solid;
+  z-index: 3;
+  pointer-events: none;
+  animation: bracket-breathe 4s ease-in-out infinite;
+}
+#corner-tl { top: 18px; left: 18px; border-width: 1.5px 0 0 1.5px; }
+#corner-tr { top: 18px; right: 18px; border-width: 1.5px 1.5px 0 0; }
+#corner-bl { bottom: 18px; left: 18px; border-width: 0 0 1.5px 1.5px; }
+#corner-br { bottom: 18px; right: 18px; border-width: 0 1.5px 1.5px 0; }
 
-  #status {
-    flex: 1;
-    font-size: 7px;
-    color: #f88;
-    text-align: center;
-    min-height: 14px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+/* ── Shutter flash ── */
+#shutter-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.05s;
+}
+#shutter-flash.flash { opacity: 0.4; }
 
-  #settings-btn {
-    margin-left: auto;
-    background: rgba(0,0,0,0.5);
-    border: 2px solid #0afe6a;
-    color: #0afe6a;
-    padding: 6px 10px;
-    font-size: 16px;
-    border-radius: 0;
-    cursor: pointer;
-    min-width: 44px;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  #settings-btn:active { background: rgba(10,254,106,0.2); }
+/* ── Top HUD ── */
+#hud-top {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 100%);
+  z-index: 10;
+}
 
-  /* ── Bottom camera bar ── */
-  #camera-bar {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    padding: 20px 32px env(safe-area-inset-bottom, 20px);
-    display: flex;
-    align-items: center;
-    justify-content: space-evenly;
-    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-    z-index: 10;
-  }
+#hud-title {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-shrink: 0;
+}
 
-  /* ── Camera buttons ── */
-  .cam-btn {
-    width: 52px;
-    height: 52px;
-    background: rgba(0,0,0,0.5);
-    border: 2px solid rgba(255,255,255,0.4);
-    color: #fff;
-    font-size: 22px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.1s, transform 0.08s;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .cam-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.9); }
+.title-main {
+  font-family: var(--font-d);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text);
+  letter-spacing: 0.14em;
+}
 
-  .shutter-btn {
-    width: 76px;
-    height: 76px;
-    border: 4px solid #fff;
-    box-shadow: 0 0 0 6px rgba(255,255,255,0.25), inset 0 0 0 4px rgba(255,255,255,0.15);
-    background: rgba(255,255,255,0.12);
-    font-size: 30px;
-    border-radius: 50%;
-    transition: transform 0.08s, background 0.08s;
-  }
-  .shutter-btn:active { transform: scale(0.88); background: rgba(255,255,255,0.45); }
+.title-sub {
+  font-family: var(--font-m);
+  font-size: 8px;
+  font-weight: 300;
+  color: var(--accent);
+  letter-spacing: 0.22em;
+  opacity: 0.85;
+}
 
-  /* ── Settings backdrop ── */
-  #settings-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 30;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s;
-  }
-  #settings-backdrop.open {
-    opacity: 1;
-    pointer-events: all;
-  }
+#status {
+  flex: 1;
+  font-family: var(--font-m);
+  font-size: 9px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--accent);
+  opacity: 0.8;
+  text-align: center;
+  min-height: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  /* ── Settings drawer ── */
-  #settings-drawer {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    background: #0a0a0f;
-    border-top: 3px solid #0afe6a;
-    box-shadow: 0 0 0 1px #000, 0 -4px 0 0 rgba(10,254,106,0.3);
-    z-index: 31;
-    transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
-    max-height: 75dvh;
-    display: flex;
-    flex-direction: column;
-    font-family: 'Press Start 2P', monospace;
-  }
-  #settings-drawer.open { transform: translateY(0); }
+#settings-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  opacity: 0.65;
+  cursor: pointer;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+#settings-btn:active { opacity: 0.3; }
 
-  #drawer-handle {
-    width: 40px;
-    height: 4px;
-    background: #0afe6a;
-    border-radius: 2px;
-    margin: 10px auto 0;
-    opacity: 0.5;
-    flex-shrink: 0;
-  }
+/* ── Bottom camera bar ── */
+#camera-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 18px 44px calc(env(safe-area-inset-bottom, 0px) + 22px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, transparent 100%);
+  z-index: 10;
+}
 
-  #drawer-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px 10px;
-    border-bottom: 1px solid rgba(10,254,106,0.2);
-    flex-shrink: 0;
-  }
-  #drawer-header span {
-    font-size: 10px;
-    color: #0afe6a;
-    letter-spacing: 2px;
-  }
+/* ── Camera buttons ── */
+.cam-btn {
+  width: 50px;
+  height: 50px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: var(--text);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, transform 0.08s;
+  -webkit-tap-highlight-color: transparent;
+}
+.cam-btn:active {
+  background: rgba(255,255,255,0.16);
+  transform: scale(0.91);
+}
 
-  #drawer-close {
-    background: transparent;
-    border: 2px solid rgba(255,255,255,0.3);
-    color: #fff;
-    font-size: 12px;
-    padding: 0;
-    width: 36px;
-    height: 36px;
-    border-radius: 0;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: inherit;
-  }
-  #drawer-close:active { background: rgba(255,255,255,0.1); }
+/* Shutter — pure CSS ring design */
+.shutter-btn {
+  width: 74px;
+  height: 74px;
+  border: 2px solid rgba(255,255,255,0.88);
+  background: transparent;
+  position: relative;
+  transition: transform 0.08s;
+}
+.shutter-btn::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  transition: transform 0.08s, opacity 0.08s;
+}
+.shutter-btn:active {
+  transform: scale(0.9);
+}
+.shutter-btn:active::after {
+  transform: scale(0.85);
+  opacity: 0.65;
+}
 
-  #drawer-body {
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 14px 16px;
-    padding-bottom: env(safe-area-inset-bottom, 14px);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
+/* ── Settings backdrop ── */
+#settings-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 30;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s;
+}
+#settings-backdrop.open {
+  opacity: 1;
+  pointer-events: all;
+}
 
-  /* ── Control rows ── */
-  .ctrl-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
+/* ── Settings drawer ── */
+#settings-drawer {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 31;
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  max-height: 78dvh;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(40px) saturate(0.6);
+  -webkit-backdrop-filter: blur(40px) saturate(0.6);
+}
+#settings-drawer.open { transform: translateY(0); }
 
-  .ctrl-row label {
-    font-size: 7px;
-    color: #0afe6a;
-    white-space: nowrap;
-    min-width: 64px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
+#drawer-handle {
+  width: 34px;
+  height: 3px;
+  background: rgba(255,255,255,0.18);
+  border-radius: 2px;
+  margin: 12px auto 0;
+  flex-shrink: 0;
+}
 
-  select {
-    background: #111;
-    color: #fff;
-    border: 2px solid #0afe6a;
-    border-radius: 0;
-    padding: 8px 8px;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 7px;
-    flex: 1;
-    min-width: 100px;
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-  }
+#drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--border-sub);
+  flex-shrink: 0;
+}
 
-  input[type=range] {
-    flex: 1;
-    min-width: 80px;
-    accent-color: #0afe6a;
-    height: 4px;
-    cursor: pointer;
-  }
+#drawer-header span {
+  font-family: var(--font-d);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
 
-  #sat-val, #exp-val {
-    font-size: 7px;
-    color: #0afe6a;
-    min-width: 36px;
-    text-align: right;
-    white-space: nowrap;
-  }
+#drawer-close {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text);
+  opacity: 0.7;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+#drawer-close:active { opacity: 0.35; background: rgba(255,255,255,0.1); }
 
-  /* ── Palette preview ── */
-  #palette-preview {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3px;
-    padding: 2px 0;
-  }
+#drawer-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  display: flex;
+  flex-direction: column;
+}
 
-  .pal-swatch {
-    width: 20px;
-    height: 20px;
-    border-radius: 0;
-    border: 1px solid rgba(255,255,255,0.15);
-    flex-shrink: 0;
-  }
+/* ── Control rows ── */
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-sub);
+}
+.ctrl-row:last-child { border-bottom: none; }
 
-  /* ── Custom color pickers ── */
-  #custom-colors {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
+.ctrl-row label {
+  font-family: var(--font-m);
+  font-size: 9.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 72px;
+}
 
-  #custom-colors input[type=color] {
-    width: 32px;
-    height: 32px;
-    border: 2px solid rgba(10,254,106,0.4);
-    border-radius: 0;
-    cursor: pointer;
-    padding: 0;
-    background: none;
-  }
+/* ── Selects ── */
+select {
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 6px;
+  padding: 9px 12px;
+  font-family: var(--font-m);
+  font-size: 11px;
+  font-weight: 400;
+  flex: 1;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  transition: border-color 0.2s;
+}
+select:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+}
 
-  /* ── Hidden video ── */
-  video { display: none; }
+/* ── Sliders ── */
+.slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
 
-  /* ── Responsive: landscape ── */
-  @media (orientation: landscape) and (max-height: 500px) {
-    #settings-drawer { max-height: 90dvh; }
-    #camera-bar { padding-bottom: 8px; padding-top: 10px; }
-    .shutter-btn { width: 60px; height: 60px; font-size: 24px; }
-    .cam-btn { width: 44px; height: 44px; font-size: 18px; }
-    #corner-tl, #corner-tr, #corner-bl, #corner-br { width: 18px; height: 18px; }
-  }
+input[type=range] {
+  flex: 1;
+  height: 2px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255,255,255,0.1);
+  border-radius: 1px;
+  cursor: pointer;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 0 4px var(--accent-glow);
+  transition: box-shadow 0.2s;
+}
+input[type=range]:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 7px var(--accent-glow);
+}
+input[type=range]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+#sat-val, #exp-val {
+  font-family: var(--font-m);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+  min-width: 40px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Palette preview ── */
+#palette-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.pal-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
+}
+
+/* ── Custom color pickers ── */
+#custom-colors {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+#custom-colors input[type=color] {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  background: none;
+}
+
+video { display: none; }
+
+/* ── Landscape ── */
+@media (orientation: landscape) and (max-height: 500px) {
+  #settings-drawer { max-height: 92dvh; }
+  #camera-bar { padding-bottom: 8px; padding-top: 12px; }
+  .shutter-btn { width: 62px; height: 62px; }
+  .shutter-btn::after { inset: 6px; }
+  .cam-btn { width: 44px; height: 44px; }
+  .corner { width: 18px; height: 18px; }
+}
 </style>
 </head>
 <body>
 
 <div id="app">
+
   <!-- Viewfinder -->
   <div id="viewfinder">
     <canvas id="output"></canvas>
@@ -366,18 +482,39 @@
     <div id="shutter-flash"></div>
   </div>
 
-  <!-- Top HUD bar -->
+  <!-- Top HUD -->
   <div id="hud-top">
-    <div id="hud-title">&#x2593; PIXEL CAM &#x2593;</div>
+    <div id="hud-title">
+      <span class="title-main">PIXEL</span>
+      <span class="title-sub">CAM</span>
+    </div>
     <div id="status">Requesting camera&hellip;</div>
-    <button id="settings-btn" title="Settings">&#x2699;</button>
+    <button id="settings-btn" title="Settings">
+      <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
+        <rect width="20" height="1.5" rx="0.75" fill="currentColor"/>
+        <rect x="4" y="6.25" width="16" height="1.5" rx="0.75" fill="currentColor"/>
+        <rect x="8" y="12.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+      </svg>
+    </button>
   </div>
 
   <!-- Bottom camera bar -->
   <div id="camera-bar">
-    <button id="flip-btn" class="cam-btn" title="Flip camera">&#x21BA;</button>
-    <button id="shutter" class="cam-btn shutter-btn" title="Capture">&#x25CE;</button>
-    <button id="save-btn" class="cam-btn" title="Download last capture" style="font-size:20px">&#x2B07;</button>
+    <button id="flip-btn" class="cam-btn" title="Flip camera">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
+        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10"/>
+        <path d="M23 14l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+      </svg>
+    </button>
+    <button id="shutter" class="cam-btn shutter-btn" title="Capture"></button>
+    <button id="save-btn" class="cam-btn" title="Download last capture">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7,10 12,15 17,10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
   </div>
 
   <!-- Settings backdrop -->
@@ -387,13 +524,17 @@
   <div id="settings-drawer">
     <div id="drawer-handle"></div>
     <div id="drawer-header">
-      <span>SETTINGS</span>
-      <button id="drawer-close">&#x2715;</button>
+      <span>Settings</span>
+      <button id="drawer-close">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
     <div id="drawer-body">
 
       <div class="ctrl-row">
-        <label>Aspect</label>
+        <label for="aspect-sel">Aspect</label>
         <select id="aspect-sel">
           <option value="auto">Auto</option>
           <option value="16:9">16:9</option>
@@ -405,7 +546,7 @@
       </div>
 
       <div class="ctrl-row">
-        <label>Short side</label>
+        <label for="short-sel">Short side</label>
         <select id="short-sel">
           <option value="16">16 px</option>
           <option value="24">24 px</option>
@@ -418,19 +559,23 @@
       </div>
 
       <div class="ctrl-row">
-        <label>Saturation</label>
-        <input type="range" id="sat-slider" min="0" max="300" step="5" value="100">
-        <span id="sat-val">100%</span>
+        <label for="sat-slider">Saturation</label>
+        <div class="slider-wrap">
+          <input type="range" id="sat-slider" min="0" max="300" step="5" value="100">
+          <span id="sat-val">100%</span>
+        </div>
       </div>
 
       <div class="ctrl-row">
-        <label>Exposure</label>
-        <input type="range" id="exp-slider" min="-128" max="128" step="4" value="0">
-        <span id="exp-val">0</span>
+        <label for="exp-slider">Exposure</label>
+        <div class="slider-wrap">
+          <input type="range" id="exp-slider" min="-128" max="128" step="4" value="0">
+          <span id="exp-val">0</span>
+        </div>
       </div>
 
       <div class="ctrl-row">
-        <label>Filter</label>
+        <label for="filter-sel">Filter</label>
         <select id="filter-sel">
           <option value="center" selected>Center Sample</option>
           <option value="majority">Majority Vote</option>
@@ -438,9 +583,9 @@
       </div>
 
       <div class="ctrl-row">
-        <label>Palette</label>
+        <label for="palette-sel">Palette</label>
         <select id="palette-sel">
-          <!-- populated by initApp() from palettes/manifest.json -->
+          <!-- populated by initApp() -->
         </select>
       </div>
 
@@ -456,6 +601,7 @@
 
     </div>
   </div>
+
 </div>
 
 <video id="video" autoplay playsinline muted></video>
