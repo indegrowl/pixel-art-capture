@@ -3,474 +3,358 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Pixel Camera</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<title>Pixel Art Camera</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-:root {
-  --accent:       #C8922A;
-  --accent-glow:  rgba(200,146,42,0.14);
-  --accent-dim:   rgba(200,146,42,0.28);
-  --text:         #EDE8DF;
-  --text-muted:   rgba(237,232,223,0.42);
-  --text-faint:   rgba(237,232,223,0.08);
-  --surface:      rgba(9,8,7,0.97);
-  --border:       rgba(200,146,42,0.22);
-  --border-sub:   rgba(237,232,223,0.06);
-  --font-d:       'Syne', sans-serif;
-  --font-m:       'JetBrains Mono', monospace;
-}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #000;
+    color: #fff;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    overflow: hidden;
+    height: 100dvh;
+    width: 100dvw;
+  }
 
-body {
-  background: #050504;
-  color: var(--text);
-  font-family: var(--font-m);
-  overflow: hidden;
-  height: 100dvh;
-  width: 100dvw;
-  -webkit-font-smoothing: antialiased;
-}
+  /* ── App container ── */
+  #app {
+    position: relative;
+    width: 100dvw;
+    height: 100dvh;
+    overflow: hidden;
+    background: #000;
+  }
 
-/* ── App ── */
-#app {
-  position: relative;
-  width: 100dvw;
-  height: 100dvh;
-  overflow: hidden;
-  background: #050504;
-}
+  /* ── Viewfinder ── */
+  #viewfinder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 
-/* ── Viewfinder ── */
-#viewfinder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+  #output {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
 
-#output {
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-}
+  /* ── Scanlines overlay ── */
+  #scanlines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 3px,
+      rgba(0,0,0,0.15) 3px, rgba(0,0,0,0.15) 4px
+    );
+    z-index: 2;
+  }
 
-/* Vignette */
-#viewfinder::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse 85% 85% at 50% 50%, transparent 38%, rgba(0,0,0,0.6) 100%);
-  z-index: 1;
-}
+  /* ── Corner brackets ── */
+  .corner {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #0afe6a;
+    z-index: 3;
+    pointer-events: none;
+  }
+  #corner-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; }
+  #corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
+  #corner-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; }
+  #corner-br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
 
-/* ── Scanlines ── */
-#scanlines {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px, transparent 2px,
-    rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 3px
-  );
-  z-index: 2;
-}
+  /* ── Shutter flash ── */
+  #shutter-flash {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 20;
+    transition: opacity 0.05s;
+  }
+  #shutter-flash.flash { opacity: 0.7; }
 
-/* ── Corner brackets ── */
-@keyframes bracket-breathe {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 0.85; }
-}
+  /* ── Top HUD bar ── */
+  #hud-top {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: env(safe-area-inset-top, 8px) 16px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
+    z-index: 10;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+  }
 
-.corner {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-color: var(--accent);
-  border-style: solid;
-  z-index: 3;
-  pointer-events: none;
-  animation: bracket-breathe 4s ease-in-out infinite;
-}
-#corner-tl { top: 18px; left: 18px; border-width: 1.5px 0 0 1.5px; }
-#corner-tr { top: 18px; right: 18px; border-width: 1.5px 1.5px 0 0; }
-#corner-bl { bottom: 18px; left: 18px; border-width: 0 0 1.5px 1.5px; }
-#corner-br { bottom: 18px; right: 18px; border-width: 0 1.5px 1.5px 0; }
+  #hud-title {
+    color: #0afe6a;
+    font-size: 10px;
+    text-shadow: 0 0 8px rgba(10,254,106,0.6);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
 
-/* ── Shutter flash ── */
-#shutter-flash {
-  position: absolute;
-  inset: 0;
-  background: #fff;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 20;
-  transition: opacity 0.05s;
-}
-#shutter-flash.flash { opacity: 0.4; }
+  #status {
+    flex: 1;
+    font-size: 7px;
+    color: #f88;
+    text-align: center;
+    min-height: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-/* ── Top HUD ── */
-#hud-top {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 100%);
-  z-index: 10;
-}
+  #settings-btn {
+    margin-left: auto;
+    background: rgba(0,0,0,0.5);
+    border: 2px solid #0afe6a;
+    color: #0afe6a;
+    padding: 6px 10px;
+    font-size: 16px;
+    border-radius: 0;
+    cursor: pointer;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  #settings-btn:active { background: rgba(10,254,106,0.2); }
 
-#hud-title {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  flex-shrink: 0;
-}
+  /* ── Bottom camera bar ── */
+  #camera-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 20px 32px env(safe-area-inset-bottom, 20px);
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    z-index: 10;
+  }
 
-.title-main {
-  font-family: var(--font-d);
-  font-weight: 800;
-  font-size: 17px;
-  color: var(--text);
-  letter-spacing: 0.14em;
-}
+  /* ── Camera buttons ── */
+  .cam-btn {
+    width: 52px;
+    height: 52px;
+    background: rgba(0,0,0,0.5);
+    border: 2px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-size: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, transform 0.08s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cam-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.9); }
 
-.title-sub {
-  font-family: var(--font-m);
-  font-size: 8px;
-  font-weight: 300;
-  color: var(--accent);
-  letter-spacing: 0.22em;
-  opacity: 0.85;
-}
+  .shutter-btn {
+    width: 76px;
+    height: 76px;
+    border: 4px solid #fff;
+    box-shadow: 0 0 0 6px rgba(255,255,255,0.25), inset 0 0 0 4px rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.12);
+    font-size: 30px;
+    border-radius: 50%;
+    transition: transform 0.08s, background 0.08s;
+  }
+  .shutter-btn:active { transform: scale(0.88); background: rgba(255,255,255,0.45); }
 
-#status {
-  flex: 1;
-  font-family: var(--font-m);
-  font-size: 9px;
-  font-weight: 300;
-  font-style: italic;
-  color: var(--accent);
-  opacity: 0.8;
-  text-align: center;
-  min-height: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  /* ── Settings backdrop ── */
+  #settings-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 30;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  #settings-backdrop.open {
+    opacity: 1;
+    pointer-events: all;
+  }
 
-#settings-btn {
-  margin-left: auto;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  opacity: 0.65;
-  cursor: pointer;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  -webkit-tap-highlight-color: transparent;
-  transition: opacity 0.15s;
-}
-#settings-btn:active { opacity: 0.3; }
+  /* ── Settings drawer ── */
+  #settings-drawer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: #0a0a0f;
+    border-top: 3px solid #0afe6a;
+    box-shadow: 0 0 0 1px #000, 0 -4px 0 0 rgba(10,254,106,0.3);
+    z-index: 31;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    max-height: 75dvh;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Press Start 2P', monospace;
+  }
+  #settings-drawer.open { transform: translateY(0); }
 
-/* ── Bottom camera bar ── */
-#camera-bar {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  padding: 18px 44px calc(env(safe-area-inset-bottom, 0px) + 22px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, transparent 100%);
-  z-index: 10;
-}
+  #drawer-handle {
+    width: 40px;
+    height: 4px;
+    background: #0afe6a;
+    border-radius: 2px;
+    margin: 10px auto 0;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
 
-/* ── Camera buttons ── */
-.cam-btn {
-  width: 50px;
-  height: 50px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.16);
-  color: var(--text);
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s, transform 0.08s;
-  -webkit-tap-highlight-color: transparent;
-}
-.cam-btn:active {
-  background: rgba(255,255,255,0.16);
-  transform: scale(0.91);
-}
+  #drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid rgba(10,254,106,0.2);
+    flex-shrink: 0;
+  }
+  #drawer-header span {
+    font-size: 10px;
+    color: #0afe6a;
+    letter-spacing: 2px;
+  }
 
-/* Shutter — pure CSS ring design */
-.shutter-btn {
-  width: 74px;
-  height: 74px;
-  border: 2px solid rgba(255,255,255,0.88);
-  background: transparent;
-  position: relative;
-  transition: transform 0.08s;
-}
-.shutter-btn::after {
-  content: '';
-  position: absolute;
-  inset: 7px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.9);
-  transition: transform 0.08s, opacity 0.08s;
-}
-.shutter-btn:active {
-  transform: scale(0.9);
-}
-.shutter-btn:active::after {
-  transform: scale(0.85);
-  opacity: 0.65;
-}
+  #drawer-close {
+    background: transparent;
+    border: 2px solid rgba(255,255,255,0.3);
+    color: #fff;
+    font-size: 12px;
+    padding: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+  }
+  #drawer-close:active { background: rgba(255,255,255,0.1); }
 
-/* ── Settings backdrop ── */
-#settings-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  z-index: 30;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.28s;
-}
-#settings-backdrop.open {
-  opacity: 1;
-  pointer-events: all;
-}
+  #drawer-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px;
+    padding-bottom: env(safe-area-inset-bottom, 14px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
 
-/* ── Settings drawer ── */
-#settings-drawer {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  z-index: 31;
-  transform: translateY(100%);
-  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
-  max-height: 78dvh;
-  display: flex;
-  flex-direction: column;
-  backdrop-filter: blur(40px) saturate(0.6);
-  -webkit-backdrop-filter: blur(40px) saturate(0.6);
-}
-#settings-drawer.open { transform: translateY(0); }
+  /* ── Control rows ── */
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
 
-#drawer-handle {
-  width: 34px;
-  height: 3px;
-  background: rgba(255,255,255,0.18);
-  border-radius: 2px;
-  margin: 12px auto 0;
-  flex-shrink: 0;
-}
+  .ctrl-row label {
+    font-size: 7px;
+    color: #0afe6a;
+    white-space: nowrap;
+    min-width: 64px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
 
-#drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px 12px;
-  border-bottom: 1px solid var(--border-sub);
-  flex-shrink: 0;
-}
+  select {
+    background: #111;
+    color: #fff;
+    border: 2px solid #0afe6a;
+    border-radius: 0;
+    padding: 8px 8px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    flex: 1;
+    min-width: 100px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
 
-#drawer-header span {
-  font-family: var(--font-d);
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  color: var(--text);
-}
+  input[type=range] {
+    flex: 1;
+    min-width: 80px;
+    accent-color: #0afe6a;
+    height: 4px;
+    cursor: pointer;
+  }
 
-#drawer-close {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: var(--text);
-  opacity: 0.7;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-  transition: opacity 0.15s;
-}
-#drawer-close:active { opacity: 0.35; background: rgba(255,255,255,0.1); }
+  #sat-val, #exp-val {
+    font-size: 7px;
+    color: #0afe6a;
+    min-width: 36px;
+    text-align: right;
+    white-space: nowrap;
+  }
 
-#drawer-body {
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 0 20px;
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
-  display: flex;
-  flex-direction: column;
-}
+  /* ── Palette preview ── */
+  #palette-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 2px 0;
+  }
 
-/* ── Control rows ── */
-.ctrl-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border-sub);
-}
-.ctrl-row:last-child { border-bottom: none; }
+  .pal-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 0;
+    border: 1px solid rgba(255,255,255,0.15);
+    flex-shrink: 0;
+  }
 
-.ctrl-row label {
-  font-family: var(--font-m);
-  font-size: 9.5px;
-  font-weight: 400;
-  color: var(--text-muted);
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  flex-shrink: 0;
-  min-width: 72px;
-}
+  /* ── Custom color pickers ── */
+  #custom-colors {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
 
-/* ── Selects ── */
-select {
-  background: rgba(255,255,255,0.05);
-  color: var(--text);
-  border: 1px solid rgba(255,255,255,0.11);
-  border-radius: 6px;
-  padding: 9px 12px;
-  font-family: var(--font-m);
-  font-size: 11px;
-  font-weight: 400;
-  flex: 1;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-  min-width: 0;
-  transition: border-color 0.2s;
-}
-select:focus {
-  outline: none;
-  border-color: var(--accent-dim);
-}
+  #custom-colors input[type=color] {
+    width: 32px;
+    height: 32px;
+    border: 2px solid rgba(10,254,106,0.4);
+    border-radius: 0;
+    cursor: pointer;
+    padding: 0;
+    background: none;
+  }
 
-/* ── Sliders ── */
-.slider-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
+  /* ── Hidden video ── */
+  video { display: none; }
 
-input[type=range] {
-  flex: 1;
-  height: 2px;
-  appearance: none;
-  -webkit-appearance: none;
-  background: rgba(255,255,255,0.1);
-  border-radius: 1px;
-  cursor: pointer;
-  outline: none;
-}
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent);
-  cursor: pointer;
-  box-shadow: 0 0 0 4px var(--accent-glow);
-  transition: box-shadow 0.2s;
-}
-input[type=range]:active::-webkit-slider-thumb {
-  box-shadow: 0 0 0 7px var(--accent-glow);
-}
-input[type=range]::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: none;
-  cursor: pointer;
-}
-
-#sat-val, #exp-val {
-  font-family: var(--font-m);
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--accent);
-  min-width: 40px;
-  text-align: right;
-  white-space: nowrap;
-}
-
-/* ── Palette preview ── */
-#palette-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  flex: 1;
-}
-
-.pal-swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
-}
-
-/* ── Custom color pickers ── */
-#custom-colors {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex: 1;
-}
-#custom-colors input[type=color] {
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 0;
-  background: none;
-}
-
-video { display: none; }
-
-/* ── Landscape ── */
-@media (orientation: landscape) and (max-height: 500px) {
-  #settings-drawer { max-height: 92dvh; }
-  #camera-bar { padding-bottom: 8px; padding-top: 12px; }
-  .shutter-btn { width: 62px; height: 62px; }
-  .shutter-btn::after { inset: 6px; }
-  .cam-btn { width: 44px; height: 44px; }
-  .corner { width: 18px; height: 18px; }
-}
+  /* ── Responsive: landscape ── */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #settings-drawer { max-height: 90dvh; }
+    #camera-bar { padding-bottom: 8px; padding-top: 10px; }
+    .shutter-btn { width: 60px; height: 60px; font-size: 24px; }
+    .cam-btn { width: 44px; height: 44px; font-size: 18px; }
+    #corner-tl, #corner-tr, #corner-bl, #corner-br { width: 18px; height: 18px; }
+  }
 </style>
 </head>
 <body>
 
 <div id="app">
-
   <!-- Viewfinder -->
   <div id="viewfinder">
     <canvas id="output"></canvas>
@@ -482,39 +366,18 @@ video { display: none; }
     <div id="shutter-flash"></div>
   </div>
 
-  <!-- Top HUD -->
+  <!-- Top HUD bar -->
   <div id="hud-top">
-    <div id="hud-title">
-      <span class="title-main">PIXEL</span>
-      <span class="title-sub">CAM</span>
-    </div>
+    <div id="hud-title">&#x2593; PIXEL CAM &#x2593;</div>
     <div id="status">Requesting camera&hellip;</div>
-    <button id="settings-btn" title="Settings">
-      <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
-        <rect width="20" height="1.5" rx="0.75" fill="currentColor"/>
-        <rect x="4" y="6.25" width="16" height="1.5" rx="0.75" fill="currentColor"/>
-        <rect x="8" y="12.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
-      </svg>
-    </button>
+    <button id="settings-btn" title="Settings">&#x2699;</button>
   </div>
 
   <!-- Bottom camera bar -->
   <div id="camera-bar">
-    <button id="flip-btn" class="cam-btn" title="Flip camera">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
-        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10"/>
-        <path d="M23 14l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-      </svg>
-    </button>
-    <button id="shutter" class="cam-btn shutter-btn" title="Capture"></button>
-    <button id="save-btn" class="cam-btn" title="Download last capture">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7,10 12,15 17,10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-    </button>
+    <button id="flip-btn" class="cam-btn" title="Flip camera">&#x21BA;</button>
+    <button id="shutter" class="cam-btn shutter-btn" title="Capture">&#x25CE;</button>
+    <button id="save-btn" class="cam-btn" title="Download last capture" style="font-size:20px">&#x2B07;</button>
   </div>
 
   <!-- Settings backdrop -->
@@ -524,17 +387,13 @@ video { display: none; }
   <div id="settings-drawer">
     <div id="drawer-handle"></div>
     <div id="drawer-header">
-      <span>Settings</span>
-      <button id="drawer-close">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-      </button>
+      <span>SETTINGS</span>
+      <button id="drawer-close">&#x2715;</button>
     </div>
     <div id="drawer-body">
 
       <div class="ctrl-row">
-        <label for="aspect-sel">Aspect</label>
+        <label>Aspect</label>
         <select id="aspect-sel">
           <option value="auto">Auto</option>
           <option value="16:9">16:9</option>
@@ -546,7 +405,7 @@ video { display: none; }
       </div>
 
       <div class="ctrl-row">
-        <label for="short-sel">Short side</label>
+        <label>Short side</label>
         <select id="short-sel">
           <option value="16">16 px</option>
           <option value="24">24 px</option>
@@ -559,23 +418,19 @@ video { display: none; }
       </div>
 
       <div class="ctrl-row">
-        <label for="sat-slider">Saturation</label>
-        <div class="slider-wrap">
-          <input type="range" id="sat-slider" min="0" max="300" step="5" value="100">
-          <span id="sat-val">100%</span>
-        </div>
+        <label>Saturation</label>
+        <input type="range" id="sat-slider" min="0" max="300" step="5" value="100">
+        <span id="sat-val">100%</span>
       </div>
 
       <div class="ctrl-row">
-        <label for="exp-slider">Exposure</label>
-        <div class="slider-wrap">
-          <input type="range" id="exp-slider" min="-128" max="128" step="4" value="0">
-          <span id="exp-val">0</span>
-        </div>
+        <label>Exposure</label>
+        <input type="range" id="exp-slider" min="-128" max="128" step="4" value="0">
+        <span id="exp-val">0</span>
       </div>
 
       <div class="ctrl-row">
-        <label for="filter-sel">Filter</label>
+        <label>Filter</label>
         <select id="filter-sel">
           <option value="center" selected>Center Sample</option>
           <option value="majority">Majority Vote</option>
@@ -583,9 +438,9 @@ video { display: none; }
       </div>
 
       <div class="ctrl-row">
-        <label for="palette-sel">Palette</label>
+        <label>Palette</label>
         <select id="palette-sel">
-          <!-- populated by initApp() -->
+          <!-- populated by initApp() from palettes/manifest.json -->
         </select>
       </div>
 
@@ -601,7 +456,6 @@ video { display: none; }
 
     </div>
   </div>
-
 </div>
 
 <video id="video" autoplay playsinline muted></video>
@@ -625,7 +479,7 @@ let lastBlob = null;
 // ── Elements ──────────────────────────────────────────────────────────────────
 const video    = document.getElementById('video');
 const output   = document.getElementById('output');
-const gl       = output.getContext('webgl2', { preserveDrawingBuffer: true });
+const ctx      = output.getContext('2d', { willReadFrequently: true });
 const status   = document.getElementById('status');
 const aspectSel = document.getElementById('aspect-sel');
 const shortSel  = document.getElementById('short-sel');
@@ -658,7 +512,6 @@ function buildColorPickers() {
 
 function rebuildCustomPalette() {
   currentPalette = customColors.map(hex => hexToRgb(hex));
-  uploadPalette();
 }
 
 function hexToRgb(hex) {
@@ -699,202 +552,68 @@ function updatePalettePreview(palette) {
   });
 }
 
-// ── WebGL2 shader sources ──────────────────────────────────────────────────────
-const VERT_SRC = `#version 300 es
-in vec2 a_pos;
-void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
-`;
-
-const FRAG_SRC = `#version 300 es
-precision mediump float;
-precision mediump int;
-
-uniform sampler2D u_video;
-uniform sampler2D u_paletteTex;  // 256×1 RGBA8, each texel = one palette color
-uniform int  u_paletteSize;
-uniform float u_blockSize;
-uniform vec2  u_resolution;   // ow, oh
-uniform ivec2 u_cropOffset;   // ox, oy (in video pixels)
-uniform float u_saturation;
-uniform float u_exposure;     // -128..128 passed as-is
-uniform int   u_filterMode;   // 0=center, 1=majority
-
-out vec4 fragColor;
-
-vec3 rgb2hsl(vec3 c) {
-  float mx = max(c.r, max(c.g, c.b));
-  float mn = min(c.r, min(c.g, c.b));
-  float l = (mx + mn) * 0.5;
-  if (mx == mn) return vec3(0.0, 0.0, l);
-  float d = mx - mn;
-  float s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
-  float h;
-  if (mx == c.r)      h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
-  else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
-  else                h = (c.r - c.g) / d + 4.0;
-  return vec3(h / 6.0, s, l);
+// ── Saturation boost ──────────────────────────────────────────────────────────
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r)      h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else                h = (r - g) / d + 4;
+  return [h / 6, s, l];
 }
 
-float hue2rgb(float p, float q, float t) {
-  t = fract(t);
-  if (t < 1.0/6.0) return p + (q - p) * 6.0 * t;
-  if (t < 0.5)     return q;
-  if (t < 2.0/3.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
+function hue2rgb(p, q, t) {
+  if (t < 0) t += 1;
+  if (t > 1) t -= 1;
+  if (t < 1/6) return p + (q - p) * 6 * t;
+  if (t < 1/2) return q;
+  if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
   return p;
 }
 
-vec3 hsl2rgb(vec3 hsl) {
-  if (hsl.y == 0.0) return vec3(hsl.z);
-  float q = hsl.z < 0.5 ? hsl.z * (1.0 + hsl.y) : hsl.z + hsl.y - hsl.z * hsl.y;
-  float p = 2.0 * hsl.z - q;
-  return vec3(hue2rgb(p, q, hsl.x + 1.0/3.0),
-              hue2rgb(p, q, hsl.x),
-              hue2rgb(p, q, hsl.x - 1.0/3.0));
+function hslToRgb(h, s, l) {
+  if (s === 0) { const v = Math.round(l * 255); return [v, v, v]; }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return [
+    Math.round(hue2rgb(p, q, h + 1/3) * 255),
+    Math.round(hue2rgb(p, q, h) * 255),
+    Math.round(hue2rgb(p, q, h - 1/3) * 255)
+  ];
 }
 
-vec3 adjust(vec3 rgb) {
-  vec3 c = rgb;
-  if (u_saturation != 1.0) {
-    vec3 hsl = rgb2hsl(c);
-    hsl.y = min(1.0, hsl.y * u_saturation);
-    c = hsl2rgb(hsl);
+function boostSaturation(r, g, b, factor) {
+  if (factor === 1.0) return [r, g, b];
+  const [h, s, l] = rgbToHsl(r, g, b);
+  return hslToRgb(h, Math.min(1, s * factor), l);
+}
+
+// ── Nearest palette color (Euclidean RGB) ─────────────────────────────────────
+function nearestColor(r, g, b, palette) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const [pr, pg, pb] = palette[i];
+    const dr = r - pr, dg = g - pg, db = b - pb;
+    const d = dr*dr + dg*dg + db*db;
+    if (d < bestDist) { bestDist = d; best = i; }
   }
-  return clamp(c + vec3(u_exposure / 255.0), 0.0, 1.0);
+  return palette[best];
 }
 
-int nearestIdx(vec3 c) {
-  int best = 0;
-  float bestD = 1e9;
-  for (int i = 0; i < 256; i++) {
-    if (i >= u_paletteSize) break;
-    vec3 pal = texelFetch(u_paletteTex, ivec2(i, 0), 0).rgb;
-    vec3 d = c - pal;
-    float dist = dot(d, d);
-    if (dist < bestD) { bestD = dist; best = i; }
+function nearestColorIndex(r, g, b, palette) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const [pr, pg, pb] = palette[i];
+    const dr = r - pr, dg = g - pg, db = b - pb;
+    const d = dr*dr + dg*dg + db*db;
+    if (d < bestDist) { bestDist = d; best = i; }
   }
   return best;
-}
-
-void main() {
-  // WebGL origin is bottom-left; flip Y to match canvas top-left coords
-  vec2 fc = vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y);
-  float bs = u_blockSize;
-  vec2 blockOrigin = floor(fc / bs) * bs;
-
-  int idx;
-  if (u_filterMode == 0) {
-    // Center sample
-    ivec2 vc = u_cropOffset + ivec2(blockOrigin + vec2(bs * 0.5));
-    vec3 rgb = adjust(texelFetch(u_video, vc, 0).rgb);
-    idx = nearestIdx(rgb);
-  } else {
-    // Majority vote — sample every pixel in block (votes capped at 64 colors)
-    int votes[64];
-    for (int i = 0; i < 64; i++) votes[i] = 0;
-    int bsi = int(bs);
-    int x0 = int(blockOrigin.x), y0 = int(blockOrigin.y);
-    int x1 = min(x0 + bsi, int(u_resolution.x));
-    int y1 = min(y0 + bsi, int(u_resolution.y));
-    for (int dy = 0; dy < 256; dy++) {
-      if (dy >= y1 - y0) break;
-      for (int dx = 0; dx < 256; dx++) {
-        if (dx >= x1 - x0) break;
-        ivec2 vc = u_cropOffset + ivec2(x0 + dx, y0 + dy);
-        vec3 rgb = adjust(texelFetch(u_video, vc, 0).rgb);
-        int ni = nearestIdx(rgb);
-        if (ni < 64) votes[ni]++;
-      }
-    }
-    int best = 0;
-    for (int i = 1; i < 64; i++) {
-      if (i >= u_paletteSize) break;
-      if (votes[i] > votes[best]) best = i;
-    }
-    idx = best;
-  }
-
-  fragColor = texelFetch(u_paletteTex, ivec2(idx, 0), 0);
-}
-`;
-
-// ── WebGL2 state ───────────────────────────────────────────────────────────────
-let glProgram, glTex, glPalTex, glVAO;
-let uBlockSize, uResolution, uCropOffset, uSaturation, uExposure, uFilterMode, uPaletteSize;
-
-function initWebGL() {
-  function compile(type, src) {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-      throw new Error(gl.getShaderInfoLog(s));
-    return s;
-  }
-  glProgram = gl.createProgram();
-  gl.attachShader(glProgram, compile(gl.VERTEX_SHADER, VERT_SRC));
-  gl.attachShader(glProgram, compile(gl.FRAGMENT_SHADER, FRAG_SRC));
-  gl.linkProgram(glProgram);
-  if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS))
-    throw new Error(gl.getProgramInfoLog(glProgram));
-  gl.useProgram(glProgram);
-
-  // Fullscreen quad (2 triangles)
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-  const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER,
-    new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(glProgram, 'a_pos');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  glVAO = vao;
-
-  // Video texture
-  glTex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, glTex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.uniform1i(gl.getUniformLocation(glProgram, 'u_video'), 0);
-
-  // Palette texture (unit 1)
-  glPalTex = gl.createTexture();
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, glPalTex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.uniform1i(gl.getUniformLocation(glProgram, 'u_paletteTex'), 1);
-  gl.activeTexture(gl.TEXTURE0);
-
-  // Cache uniform locations
-  uBlockSize   = gl.getUniformLocation(glProgram, 'u_blockSize');
-  uResolution  = gl.getUniformLocation(glProgram, 'u_resolution');
-  uCropOffset  = gl.getUniformLocation(glProgram, 'u_cropOffset');
-  uSaturation  = gl.getUniformLocation(glProgram, 'u_saturation');
-  uExposure    = gl.getUniformLocation(glProgram, 'u_exposure');
-  uFilterMode  = gl.getUniformLocation(glProgram, 'u_filterMode');
-  uPaletteSize = gl.getUniformLocation(glProgram, 'u_paletteSize');
-}
-
-function uploadPalette() {
-  if (!glProgram) return;
-  const n = Math.min(currentPalette.length, 256);
-  const data = new Uint8Array(256 * 4);
-  for (let i = 0; i < n; i++) {
-    data[i*4]   = currentPalette[i][0];
-    data[i*4+1] = currentPalette[i][1];
-    data[i*4+2] = currentPalette[i][2];
-    data[i*4+3] = 255;
-  }
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, glPalTex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.uniform1i(uPaletteSize, n);
 }
 
 // ── Compute cropped output dimensions from aspect ratio ────────────────────────
@@ -909,38 +628,67 @@ function outputDims(vw, vh) {
   return [ow, oh, Math.floor((vw - ow) / 2), Math.floor((vh - oh) / 2)];
 }
 
-// ── WebGL render loop ──────────────────────────────────────────────────────────
+// ── Pixel art render loop ──────────────────────────────────────────────────────
+function drawCenter(ow, oh, ox, oy, bs, cols, rows, vw, vh) {
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const sx = Math.min(ox + col * bs + (bs >> 1), vw - 1);
+      const sy = Math.min(oy + row * bs + (bs >> 1), vh - 1);
+      const px = offCtx.getImageData(sx, sy, 1, 1).data;
+      const [sr, sg, sb] = boostSaturation(px[0], px[1], px[2], saturation);
+      const er = Math.max(0, Math.min(255, sr + exposure));
+      const eg = Math.max(0, Math.min(255, sg + exposure));
+      const eb = Math.max(0, Math.min(255, sb + exposure));
+      const [nr, ng, nb] = nearestColor(er, eg, eb, currentPalette);
+      ctx.fillStyle = `rgb(${nr},${ng},${nb})`;
+      ctx.fillRect(col * bs, row * bs, bs, bs);
+    }
+  }
+}
+
+function drawMajority(ow, oh, ox, oy, bs, cols, rows) {
+  // Read the entire crop region in one call — much cheaper than per-pixel getImageData
+  const imgData = offCtx.getImageData(ox, oy, ow, oh).data;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const votes = new Int32Array(currentPalette.length);
+      const x0 = col * bs, y0 = row * bs;
+      const x1 = Math.min(x0 + bs, ow), y1 = Math.min(y0 + bs, oh);
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * ow + x) * 4;
+          const [sr, sg, sb] = boostSaturation(imgData[i], imgData[i+1], imgData[i+2], saturation);
+          const er = Math.max(0, Math.min(255, sr + exposure));
+          const eg = Math.max(0, Math.min(255, sg + exposure));
+          const eb = Math.max(0, Math.min(255, sb + exposure));
+          votes[nearestColorIndex(er, eg, eb, currentPalette)]++;
+        }
+      }
+      let best = 0;
+      for (let i = 1; i < votes.length; i++) if (votes[i] > votes[best]) best = i;
+      const [nr, ng, nb] = currentPalette[best];
+      ctx.fillStyle = `rgb(${nr},${ng},${nb})`;
+      ctx.fillRect(col * bs, row * bs, bs, bs);
+    }
+  }
+}
+
 function renderFrame() {
   animFrame = requestAnimationFrame(renderFrame);
   if (video.readyState < 2) return;
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw || !vh) return;
   const [ow, oh, ox, oy] = outputDims(vw, vh);
-
-  if (output.width !== ow || output.height !== oh) {
-    output.width = ow; output.height = oh;
-    gl.viewport(0, 0, ow, oh);
-  }
-  if (offscreen.width !== vw || offscreen.height !== vh) {
-    offscreen.width = vw; offscreen.height = vh;
-  }
-
-  // Upload video frame to GPU texture
+  if (output.width !== ow || output.height !== oh) { output.width = ow; output.height = oh; }
+  if (offscreen.width !== vw || offscreen.height !== vh) { offscreen.width = vw; offscreen.height = vh; }
   offCtx.drawImage(video, 0, 0, vw, vh);
-  gl.bindTexture(gl.TEXTURE_2D, glTex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen);
-
-  // Set per-frame uniforms
   const bs = Math.max(1, Math.round(Math.min(ow, oh) / targetShortSide));
-  gl.uniform1f(uBlockSize,  bs);
-  gl.uniform2f(uResolution, ow, oh);
-  gl.uniform2i(uCropOffset, ox, oy);
-  gl.uniform1f(uSaturation, saturation);
-  gl.uniform1f(uExposure,   exposure);
-  gl.uniform1i(uFilterMode, filterMode === 'majority' ? 1 : 0);
-
-  gl.bindVertexArray(glVAO);
-  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  const cols = Math.ceil(ow / bs), rows = Math.ceil(oh / bs);
+  if (filterMode === 'majority') {
+    drawMajority(ow, oh, ox, oy, bs, cols, rows);
+  } else {
+    drawCenter(ow, oh, ox, oy, bs, cols, rows, vw, vh);
+  }
 }
 
 // ── Camera setup ───────────────────────────────────────────────────────────────
@@ -1003,7 +751,7 @@ palSel.addEventListener('change', async () => {
   const v = palSel.value;
   if (v === 'custom') {
     custRow.style.display = 'flex';
-    rebuildCustomPalette();  // calls uploadPalette() internally
+    rebuildCustomPalette();
     updatePalettePreview(currentPalette);
   } else {
     custRow.style.display = 'none';
@@ -1011,7 +759,6 @@ palSel.addEventListener('change', async () => {
     try {
       currentPalette = await loadPalette(v);
       updatePalettePreview(currentPalette);
-      uploadPalette();
     } catch (e) {
       status.textContent = e.message;
     } finally {
@@ -1106,13 +853,6 @@ async function initApp() {
     status.textContent = e.message; return;
   }
   updatePalettePreview(currentPalette);
-  if (!gl) { status.textContent = 'WebGL2 not supported on this device.'; return; }
-  try {
-    initWebGL();
-  } catch (e) {
-    status.textContent = 'WebGL error: ' + e.message; return;
-  }
-  uploadPalette();
   startCamera(facingMode);
 }
 initApp();
