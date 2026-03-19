@@ -943,7 +943,12 @@ async function initApp() {
     status.textContent = e.message; return;
   }
   updatePalettePreview(currentPalette);
-  initWebGL();
+  if (!gl) { status.textContent = 'WebGL2 not supported on this device.'; return; }
+  try {
+    initWebGL();
+  } catch (e) {
+    status.textContent = 'WebGL error: ' + e.message; return;
+  }
   uploadPalette();
   startCamera(facingMode);
 }
