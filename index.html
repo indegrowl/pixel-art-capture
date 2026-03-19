@@ -564,7 +564,7 @@ precision mediump float;
 precision mediump int;
 
 uniform sampler2D u_video;
-uniform vec3 u_palette[256];
+uniform sampler2D u_paletteTex;  // 256×1 RGBA8, each texel = one palette color
 uniform int  u_paletteSize;
 uniform float u_blockSize;
 uniform vec2  u_resolution;   // ow, oh
@@ -621,7 +621,8 @@ int nearestIdx(vec3 c) {
   float bestD = 1e9;
   for (int i = 0; i < 256; i++) {
     if (i >= u_paletteSize) break;
-    vec3 d = c - u_palette[i];
+    vec3 pal = texelFetch(u_paletteTex, ivec2(i, 0), 0).rgb;
+    vec3 d = c - pal;
     float dist = dot(d, d);
     if (dist < bestD) { bestD = dist; best = i; }
   }
@@ -641,9 +642,9 @@ void main() {
     vec3 rgb = adjust(texelFetch(u_video, vc, 0).rgb);
     idx = nearestIdx(rgb);
   } else {
-    // Majority vote — sample every pixel in block
-    int votes[256];
-    for (int i = 0; i < 256; i++) votes[i] = 0;
+    // Majority vote — sample every pixel in block (votes capped at 64 colors)
+    int votes[64];
+    for (int i = 0; i < 64; i++) votes[i] = 0;
     int bsi = int(bs);
     int x0 = int(blockOrigin.x), y0 = int(blockOrigin.y);
     int x1 = min(x0 + bsi, int(u_resolution.x));
@@ -654,24 +655,25 @@ void main() {
         if (dx >= x1 - x0) break;
         ivec2 vc = u_cropOffset + ivec2(x0 + dx, y0 + dy);
         vec3 rgb = adjust(texelFetch(u_video, vc, 0).rgb);
-        votes[nearestIdx(rgb)]++;
+        int ni = nearestIdx(rgb);
+        if (ni < 64) votes[ni]++;
       }
     }
     int best = 0;
-    for (int i = 1; i < 256; i++) {
+    for (int i = 1; i < 64; i++) {
       if (i >= u_paletteSize) break;
       if (votes[i] > votes[best]) best = i;
     }
     idx = best;
   }
 
-  fragColor = vec4(u_palette[idx], 1.0);
+  fragColor = texelFetch(u_paletteTex, ivec2(idx, 0), 0);
 }
 `;
 
 // ── WebGL2 state ───────────────────────────────────────────────────────────────
-let glProgram, glTex, glVAO;
-let uBlockSize, uResolution, uCropOffset, uSaturation, uExposure, uFilterMode, uPalette, uPaletteSize;
+let glProgram, glTex, glPalTex, glVAO;
+let uBlockSize, uResolution, uCropOffset, uSaturation, uExposure, uFilterMode, uPaletteSize;
 
 function initWebGL() {
   function compile(type, src) {
@@ -711,6 +713,17 @@ function initWebGL() {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.uniform1i(gl.getUniformLocation(glProgram, 'u_video'), 0);
 
+  // Palette texture (unit 1)
+  glPalTex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, glPalTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(gl.getUniformLocation(glProgram, 'u_paletteTex'), 1);
+  gl.activeTexture(gl.TEXTURE0);
+
   // Cache uniform locations
   uBlockSize   = gl.getUniformLocation(glProgram, 'u_blockSize');
   uResolution  = gl.getUniformLocation(glProgram, 'u_resolution');
@@ -718,20 +731,24 @@ function initWebGL() {
   uSaturation  = gl.getUniformLocation(glProgram, 'u_saturation');
   uExposure    = gl.getUniformLocation(glProgram, 'u_exposure');
   uFilterMode  = gl.getUniformLocation(glProgram, 'u_filterMode');
-  uPalette     = gl.getUniformLocation(glProgram, 'u_palette');
   uPaletteSize = gl.getUniformLocation(glProgram, 'u_paletteSize');
 }
 
 function uploadPalette() {
   if (!glProgram) return;
-  const data = new Float32Array(256 * 3);
-  for (let i = 0; i < currentPalette.length && i < 256; i++) {
-    data[i*3]   = currentPalette[i][0] / 255;
-    data[i*3+1] = currentPalette[i][1] / 255;
-    data[i*3+2] = currentPalette[i][2] / 255;
+  const n = Math.min(currentPalette.length, 256);
+  const data = new Uint8Array(256 * 4);
+  for (let i = 0; i < n; i++) {
+    data[i*4]   = currentPalette[i][0];
+    data[i*4+1] = currentPalette[i][1];
+    data[i*4+2] = currentPalette[i][2];
+    data[i*4+3] = 255;
   }
-  gl.uniform3fv(uPalette, data);
-  gl.uniform1i(uPaletteSize, Math.min(currentPalette.length, 256));
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, glPalTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(uPaletteSize, n);
 }
 
 // ── Compute cropped output dimensions from aspect ratio ────────────────────────
