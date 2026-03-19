@@ -479,7 +479,7 @@ let lastBlob = null;
 // ── Elements ──────────────────────────────────────────────────────────────────
 const video    = document.getElementById('video');
 const output   = document.getElementById('output');
-const ctx      = output.getContext('2d', { willReadFrequently: true });
+const gl       = output.getContext('webgl2', { preserveDrawingBuffer: true });
 const status   = document.getElementById('status');
 const aspectSel = document.getElementById('aspect-sel');
 const shortSel  = document.getElementById('short-sel');
@@ -512,6 +512,7 @@ function buildColorPickers() {
 
 function rebuildCustomPalette() {
   currentPalette = customColors.map(hex => hexToRgb(hex));
+  uploadPalette();
 }
 
 function hexToRgb(hex) {
@@ -552,68 +553,185 @@ function updatePalettePreview(palette) {
   });
 }
 
-// ── Saturation boost ──────────────────────────────────────────────────────────
-function rgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h;
-  if (max === r)      h = (g - b) / d + (g < b ? 6 : 0);
-  else if (max === g) h = (b - r) / d + 2;
-  else                h = (r - g) / d + 4;
-  return [h / 6, s, l];
+// ── WebGL2 shader sources ──────────────────────────────────────────────────────
+const VERT_SRC = `#version 300 es
+in vec2 a_pos;
+void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+`;
+
+const FRAG_SRC = `#version 300 es
+precision mediump float;
+precision mediump int;
+
+uniform sampler2D u_video;
+uniform vec3 u_palette[256];
+uniform int  u_paletteSize;
+uniform float u_blockSize;
+uniform vec2  u_resolution;   // ow, oh
+uniform ivec2 u_cropOffset;   // ox, oy (in video pixels)
+uniform float u_saturation;
+uniform float u_exposure;     // -128..128 passed as-is
+uniform int   u_filterMode;   // 0=center, 1=majority
+
+out vec4 fragColor;
+
+vec3 rgb2hsl(vec3 c) {
+  float mx = max(c.r, max(c.g, c.b));
+  float mn = min(c.r, min(c.g, c.b));
+  float l = (mx + mn) * 0.5;
+  if (mx == mn) return vec3(0.0, 0.0, l);
+  float d = mx - mn;
+  float s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
+  float h;
+  if (mx == c.r)      h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
+  else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+  else                h = (c.r - c.g) / d + 4.0;
+  return vec3(h / 6.0, s, l);
 }
 
-function hue2rgb(p, q, t) {
-  if (t < 0) t += 1;
-  if (t > 1) t -= 1;
-  if (t < 1/6) return p + (q - p) * 6 * t;
-  if (t < 1/2) return q;
-  if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+float hue2rgb(float p, float q, float t) {
+  t = fract(t);
+  if (t < 1.0/6.0) return p + (q - p) * 6.0 * t;
+  if (t < 0.5)     return q;
+  if (t < 2.0/3.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
   return p;
 }
 
-function hslToRgb(h, s, l) {
-  if (s === 0) { const v = Math.round(l * 255); return [v, v, v]; }
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  return [
-    Math.round(hue2rgb(p, q, h + 1/3) * 255),
-    Math.round(hue2rgb(p, q, h) * 255),
-    Math.round(hue2rgb(p, q, h - 1/3) * 255)
-  ];
+vec3 hsl2rgb(vec3 hsl) {
+  if (hsl.y == 0.0) return vec3(hsl.z);
+  float q = hsl.z < 0.5 ? hsl.z * (1.0 + hsl.y) : hsl.z + hsl.y - hsl.z * hsl.y;
+  float p = 2.0 * hsl.z - q;
+  return vec3(hue2rgb(p, q, hsl.x + 1.0/3.0),
+              hue2rgb(p, q, hsl.x),
+              hue2rgb(p, q, hsl.x - 1.0/3.0));
 }
 
-function boostSaturation(r, g, b, factor) {
-  if (factor === 1.0) return [r, g, b];
-  const [h, s, l] = rgbToHsl(r, g, b);
-  return hslToRgb(h, Math.min(1, s * factor), l);
-}
-
-// ── Nearest palette color (Euclidean RGB) ─────────────────────────────────────
-function nearestColor(r, g, b, palette) {
-  let best = 0, bestDist = Infinity;
-  for (let i = 0; i < palette.length; i++) {
-    const [pr, pg, pb] = palette[i];
-    const dr = r - pr, dg = g - pg, db = b - pb;
-    const d = dr*dr + dg*dg + db*db;
-    if (d < bestDist) { bestDist = d; best = i; }
+vec3 adjust(vec3 rgb) {
+  vec3 c = rgb;
+  if (u_saturation != 1.0) {
+    vec3 hsl = rgb2hsl(c);
+    hsl.y = min(1.0, hsl.y * u_saturation);
+    c = hsl2rgb(hsl);
   }
-  return palette[best];
+  return clamp(c + vec3(u_exposure / 255.0), 0.0, 1.0);
 }
 
-function nearestColorIndex(r, g, b, palette) {
-  let best = 0, bestDist = Infinity;
-  for (let i = 0; i < palette.length; i++) {
-    const [pr, pg, pb] = palette[i];
-    const dr = r - pr, dg = g - pg, db = b - pb;
-    const d = dr*dr + dg*dg + db*db;
-    if (d < bestDist) { bestDist = d; best = i; }
+int nearestIdx(vec3 c) {
+  int best = 0;
+  float bestD = 1e9;
+  for (int i = 0; i < 256; i++) {
+    if (i >= u_paletteSize) break;
+    vec3 d = c - u_palette[i];
+    float dist = dot(d, d);
+    if (dist < bestD) { bestD = dist; best = i; }
   }
   return best;
+}
+
+void main() {
+  // WebGL origin is bottom-left; flip Y to match canvas top-left coords
+  vec2 fc = vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y);
+  float bs = u_blockSize;
+  vec2 blockOrigin = floor(fc / bs) * bs;
+
+  int idx;
+  if (u_filterMode == 0) {
+    // Center sample
+    ivec2 vc = u_cropOffset + ivec2(blockOrigin + vec2(bs * 0.5));
+    vec3 rgb = adjust(texelFetch(u_video, vc, 0).rgb);
+    idx = nearestIdx(rgb);
+  } else {
+    // Majority vote — sample every pixel in block
+    int votes[256];
+    for (int i = 0; i < 256; i++) votes[i] = 0;
+    int bsi = int(bs);
+    int x0 = int(blockOrigin.x), y0 = int(blockOrigin.y);
+    int x1 = min(x0 + bsi, int(u_resolution.x));
+    int y1 = min(y0 + bsi, int(u_resolution.y));
+    for (int dy = 0; dy < 256; dy++) {
+      if (dy >= y1 - y0) break;
+      for (int dx = 0; dx < 256; dx++) {
+        if (dx >= x1 - x0) break;
+        ivec2 vc = u_cropOffset + ivec2(x0 + dx, y0 + dy);
+        vec3 rgb = adjust(texelFetch(u_video, vc, 0).rgb);
+        votes[nearestIdx(rgb)]++;
+      }
+    }
+    int best = 0;
+    for (int i = 1; i < 256; i++) {
+      if (i >= u_paletteSize) break;
+      if (votes[i] > votes[best]) best = i;
+    }
+    idx = best;
+  }
+
+  fragColor = vec4(u_palette[idx], 1.0);
+}
+`;
+
+// ── WebGL2 state ───────────────────────────────────────────────────────────────
+let glProgram, glTex, glVAO;
+let uBlockSize, uResolution, uCropOffset, uSaturation, uExposure, uFilterMode, uPalette, uPaletteSize;
+
+function initWebGL() {
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+      throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  glProgram = gl.createProgram();
+  gl.attachShader(glProgram, compile(gl.VERTEX_SHADER, VERT_SRC));
+  gl.attachShader(glProgram, compile(gl.FRAGMENT_SHADER, FRAG_SRC));
+  gl.linkProgram(glProgram);
+  if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS))
+    throw new Error(gl.getProgramInfoLog(glProgram));
+  gl.useProgram(glProgram);
+
+  // Fullscreen quad (2 triangles)
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER,
+    new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(glProgram, 'a_pos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  glVAO = vao;
+
+  // Video texture
+  glTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, glTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(gl.getUniformLocation(glProgram, 'u_video'), 0);
+
+  // Cache uniform locations
+  uBlockSize   = gl.getUniformLocation(glProgram, 'u_blockSize');
+  uResolution  = gl.getUniformLocation(glProgram, 'u_resolution');
+  uCropOffset  = gl.getUniformLocation(glProgram, 'u_cropOffset');
+  uSaturation  = gl.getUniformLocation(glProgram, 'u_saturation');
+  uExposure    = gl.getUniformLocation(glProgram, 'u_exposure');
+  uFilterMode  = gl.getUniformLocation(glProgram, 'u_filterMode');
+  uPalette     = gl.getUniformLocation(glProgram, 'u_palette');
+  uPaletteSize = gl.getUniformLocation(glProgram, 'u_paletteSize');
+}
+
+function uploadPalette() {
+  if (!glProgram) return;
+  const data = new Float32Array(256 * 3);
+  for (let i = 0; i < currentPalette.length && i < 256; i++) {
+    data[i*3]   = currentPalette[i][0] / 255;
+    data[i*3+1] = currentPalette[i][1] / 255;
+    data[i*3+2] = currentPalette[i][2] / 255;
+  }
+  gl.uniform3fv(uPalette, data);
+  gl.uniform1i(uPaletteSize, Math.min(currentPalette.length, 256));
 }
 
 // ── Compute cropped output dimensions from aspect ratio ────────────────────────
@@ -628,67 +746,38 @@ function outputDims(vw, vh) {
   return [ow, oh, Math.floor((vw - ow) / 2), Math.floor((vh - oh) / 2)];
 }
 
-// ── Pixel art render loop ──────────────────────────────────────────────────────
-function drawCenter(ow, oh, ox, oy, bs, cols, rows, vw, vh) {
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const sx = Math.min(ox + col * bs + (bs >> 1), vw - 1);
-      const sy = Math.min(oy + row * bs + (bs >> 1), vh - 1);
-      const px = offCtx.getImageData(sx, sy, 1, 1).data;
-      const [sr, sg, sb] = boostSaturation(px[0], px[1], px[2], saturation);
-      const er = Math.max(0, Math.min(255, sr + exposure));
-      const eg = Math.max(0, Math.min(255, sg + exposure));
-      const eb = Math.max(0, Math.min(255, sb + exposure));
-      const [nr, ng, nb] = nearestColor(er, eg, eb, currentPalette);
-      ctx.fillStyle = `rgb(${nr},${ng},${nb})`;
-      ctx.fillRect(col * bs, row * bs, bs, bs);
-    }
-  }
-}
-
-function drawMajority(ow, oh, ox, oy, bs, cols, rows) {
-  // Read the entire crop region in one call — much cheaper than per-pixel getImageData
-  const imgData = offCtx.getImageData(ox, oy, ow, oh).data;
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const votes = new Int32Array(currentPalette.length);
-      const x0 = col * bs, y0 = row * bs;
-      const x1 = Math.min(x0 + bs, ow), y1 = Math.min(y0 + bs, oh);
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          const i = (y * ow + x) * 4;
-          const [sr, sg, sb] = boostSaturation(imgData[i], imgData[i+1], imgData[i+2], saturation);
-          const er = Math.max(0, Math.min(255, sr + exposure));
-          const eg = Math.max(0, Math.min(255, sg + exposure));
-          const eb = Math.max(0, Math.min(255, sb + exposure));
-          votes[nearestColorIndex(er, eg, eb, currentPalette)]++;
-        }
-      }
-      let best = 0;
-      for (let i = 1; i < votes.length; i++) if (votes[i] > votes[best]) best = i;
-      const [nr, ng, nb] = currentPalette[best];
-      ctx.fillStyle = `rgb(${nr},${ng},${nb})`;
-      ctx.fillRect(col * bs, row * bs, bs, bs);
-    }
-  }
-}
-
+// ── WebGL render loop ──────────────────────────────────────────────────────────
 function renderFrame() {
   animFrame = requestAnimationFrame(renderFrame);
   if (video.readyState < 2) return;
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw || !vh) return;
   const [ow, oh, ox, oy] = outputDims(vw, vh);
-  if (output.width !== ow || output.height !== oh) { output.width = ow; output.height = oh; }
-  if (offscreen.width !== vw || offscreen.height !== vh) { offscreen.width = vw; offscreen.height = vh; }
-  offCtx.drawImage(video, 0, 0, vw, vh);
-  const bs = Math.max(1, Math.round(Math.min(ow, oh) / targetShortSide));
-  const cols = Math.ceil(ow / bs), rows = Math.ceil(oh / bs);
-  if (filterMode === 'majority') {
-    drawMajority(ow, oh, ox, oy, bs, cols, rows);
-  } else {
-    drawCenter(ow, oh, ox, oy, bs, cols, rows, vw, vh);
+
+  if (output.width !== ow || output.height !== oh) {
+    output.width = ow; output.height = oh;
+    gl.viewport(0, 0, ow, oh);
   }
+  if (offscreen.width !== vw || offscreen.height !== vh) {
+    offscreen.width = vw; offscreen.height = vh;
+  }
+
+  // Upload video frame to GPU texture
+  offCtx.drawImage(video, 0, 0, vw, vh);
+  gl.bindTexture(gl.TEXTURE_2D, glTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen);
+
+  // Set per-frame uniforms
+  const bs = Math.max(1, Math.round(Math.min(ow, oh) / targetShortSide));
+  gl.uniform1f(uBlockSize,  bs);
+  gl.uniform2f(uResolution, ow, oh);
+  gl.uniform2i(uCropOffset, ox, oy);
+  gl.uniform1f(uSaturation, saturation);
+  gl.uniform1f(uExposure,   exposure);
+  gl.uniform1i(uFilterMode, filterMode === 'majority' ? 1 : 0);
+
+  gl.bindVertexArray(glVAO);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
 }
 
 // ── Camera setup ───────────────────────────────────────────────────────────────
@@ -751,7 +840,7 @@ palSel.addEventListener('change', async () => {
   const v = palSel.value;
   if (v === 'custom') {
     custRow.style.display = 'flex';
-    rebuildCustomPalette();
+    rebuildCustomPalette();  // calls uploadPalette() internally
     updatePalettePreview(currentPalette);
   } else {
     custRow.style.display = 'none';
@@ -759,6 +848,7 @@ palSel.addEventListener('change', async () => {
     try {
       currentPalette = await loadPalette(v);
       updatePalettePreview(currentPalette);
+      uploadPalette();
     } catch (e) {
       status.textContent = e.message;
     } finally {
@@ -853,6 +943,8 @@ async function initApp() {
     status.textContent = e.message; return;
   }
   updatePalettePreview(currentPalette);
+  initWebGL();
+  uploadPalette();
   startCamera(facingMode);
 }
 initApp();
